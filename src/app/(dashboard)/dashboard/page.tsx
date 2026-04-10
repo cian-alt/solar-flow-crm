@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     { data: profiles },
   ] = await Promise.all([
     supabase.from("leads").select("*, assigned_profile:profiles!assigned_to(id,full_name,avatar_initials)"),
-    supabase.from("profiles").select("*").eq("id", user.id).single<Profile>(),
+    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle<Profile>(),
     supabase.from("activities").select("*, user:profiles!user_id(id,full_name,avatar_initials), lead:leads(id,company_name)").order("created_at", { ascending: false }).limit(10),
     supabase.from("tasks").select("*, lead:leads(id,company_name)").eq("assigned_to", user.id).eq("completed", false).lte("due_date", new Date().toISOString().split("T")[0]),
     supabase.from("profiles").select("*"),

@@ -8,7 +8,6 @@ import KanbanBoard from "@/components/leads/KanbanBoard";
 import LeadTable from "@/components/leads/LeadTable";
 import AddLeadDrawer from "@/components/leads/AddLeadDrawer";
 import { STAGE_ORDER } from "@/lib/utils";
-import toast from "react-hot-toast";
 
 const LOCAL_STORAGE_KEY = "solarflow_leads_view";
 
@@ -41,8 +40,7 @@ export default function LeadsPage() {
       .from("leads")
       .select("*, assigned_profile:profiles!assigned_to(id,full_name,avatar_initials,email)")
       .order("created_at", { ascending: false });
-    if (error) toast.error("Failed to load leads");
-    else setLeads((data as Lead[]) ?? []);
+    if (!error) setLeads((data as Lead[]) ?? []);
     setLoading(false);
   }, []);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
@@ -17,6 +17,35 @@ interface AddLeadDrawerProps {
 
 const SOURCES: LeadSource[] = ['Website','Referral','Cold Call','LinkedIn','Trade Show','Google Ads','Facebook Ads','Partner','Other'];
 const SIZES: CompanySize[] = ['1-10','11-50','51-200','201-500','500+'];
+
+// Defined outside the parent component so its identity is stable across re-renders.
+// If defined inside, React treats it as a new component type on every render and
+// remounts the input element, stealing focus mid-keystroke.
+interface FieldProps {
+  label: string;
+  k: keyof FormData;
+  type?: string;
+  placeholder?: string;
+  value: string;
+  error?: string;
+  onChange: (k: keyof FormData, v: string) => void;
+}
+
+function Field({ label, k, type = 'text', placeholder, value, error, onChange }: FieldProps) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-600 mb-1">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(k, e.target.value)}
+        placeholder={placeholder}
+        className={`w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#1B3A6B]/30 transition-all ${error ? 'border-red-300 bg-red-50' : 'border-white/80 bg-white/60'}`}
+      />
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+}
 
 interface FormData {
   company_name: string;
@@ -35,7 +64,7 @@ interface FormData {
 }
 
 export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }: AddLeadDrawerProps) {
-  const supabase = createClient();
+  const supabaseRef = useRef(createClient());
   const [form, setForm] = useState<FormData>({
     company_name: '', contact_name: '', email: '', phone: '',
     address: '', eircode: '', company_size: '', deal_value: '',
@@ -46,10 +75,10 @@ export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }
   const [duplicate, setDuplicate] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const set = (k: keyof FormData, v: string) => {
+  const set = useCallback((k: keyof FormData, v: string) => {
     setForm(f => ({ ...f, [k]: v }));
     setErrors(e => ({ ...e, [k]: undefined }));
-  };
+  }, []);
 
   const validate = () => {
     const errs: Partial<FormData> = {};
@@ -60,15 +89,9 @@ export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }
   };
 
   const checkDuplicate = async (): Promise<string | null> => {
-    const checks = [];
-    if (form.company_name.trim()) {
-      checks.push(supabase.from('leads').select('id,company_name').ilike('company_name', form.company_name.trim()).single());
-    }
-    for (const check of checks) {
-      const { data } = await check;
-      if (data) return data.company_name;
-    }
-    return null;
+    if (!form.company_name.trim()) return null;
+    const { data } = await supabaseRef.current.from('leads').select('id,company_name').ilike('company_name', form.company_name.trim()).maybeSingle();
+    return data ? data.company_name : null;
   };
 
   const submit = async (force = false) => {
@@ -91,7 +114,7 @@ export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }
         has_notes: false,
       });
 
-      const { data: lead, error } = await supabase.from('leads').insert({
+      const { data: lead, error } = await supabaseRef.current.from('leads').insert({
         company_name: form.company_name.trim(),
         contact_name: form.contact_name.trim(),
         email: form.email || null,
@@ -111,9 +134,9 @@ export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }
       if (error) throw error;
 
       // Log creation activity
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await supabaseRef.current.auth.getUser();
       if (user && lead) {
-        await supabase.from('activities').insert({
+        await supabaseRef.current.from('activities').insert({
           lead_id: lead.id, user_id: user.id,
           type: 'created', description: 'Lead created',
           metadata: {},
@@ -139,16 +162,6 @@ export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }
     setErrors({});
     setDuplicate(null);
   };
-
-  const Field = ({ label, k, type = 'text', placeholder }: { label: string; k: keyof FormData; type?: string; placeholder?: string }) => (
-    <div>
-      <label className="block text-xs font-semibold text-slate-600 mb-1">{label}</label>
-      <input type={type} value={form[k]} onChange={e => set(k, e.target.value)} placeholder={placeholder}
-        className={`w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#1B3A6B]/30 transition-all
-          ${errors[k] ? 'border-red-300 bg-red-50' : 'border-white/80 bg-white/60'}`} />
-      {errors[k] && <p className="text-xs text-red-500 mt-1">{errors[k]}</p>}
-    </div>
-  );
 
   return (
     <AnimatePresence>
@@ -195,16 +208,16 @@ export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }
             {/* Form */}
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Company Name *" k="company_name" placeholder="Acme Solar Ltd" />
-                <Field label="Contact Name *" k="contact_name" placeholder="John Murphy" />
+                <Field label="Company Name *" k="company_name" placeholder="Acme Solar Ltd" value={form.company_name} error={errors.company_name} onChange={set} />
+                <Field label="Contact Name *" k="contact_name" placeholder="John Murphy" value={form.contact_name} error={errors.contact_name} onChange={set} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Email" k="email" type="email" placeholder="john@acme.ie" />
-                <Field label="Phone" k="phone" type="tel" placeholder="+353 1 234 5678" />
+                <Field label="Email" k="email" type="email" placeholder="john@acme.ie" value={form.email} error={errors.email} onChange={set} />
+                <Field label="Phone" k="phone" type="tel" placeholder="+353 1 234 5678" value={form.phone} onChange={set} />
               </div>
-              <Field label="Address" k="address" placeholder="123 Main Street, Dublin" />
+              <Field label="Address" k="address" placeholder="123 Main Street, Dublin" value={form.address} onChange={set} />
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Eircode" k="eircode" placeholder="D01 F5P2" />
+                <Field label="Eircode" k="eircode" placeholder="D01 F5P2" value={form.eircode} onChange={set} />
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Company Size</label>
                   <select value={form.company_size} onChange={e => set('company_size', e.target.value)}
@@ -215,8 +228,8 @@ export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Deal Value (€)" k="deal_value" type="number" placeholder="50000" />
-                <Field label="System Size (kW)" k="system_size_kw" type="number" placeholder="25" />
+                <Field label="Deal Value (€)" k="deal_value" type="number" placeholder="50000" value={form.deal_value} onChange={set} />
+                <Field label="System Size (kW)" k="system_size_kw" type="number" placeholder="25" value={form.system_size_kw} onChange={set} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -244,7 +257,7 @@ export default function AddLeadDrawer({ isOpen, onClose, profiles, onLeadAdded }
                     {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name ?? p.email}</option>)}
                   </select>
                 </div>
-                <Field label="Follow-up Date" k="follow_up_date" type="date" />
+                <Field label="Follow-up Date" k="follow_up_date" type="date" value={form.follow_up_date} onChange={set} />
               </div>
             </div>
 
