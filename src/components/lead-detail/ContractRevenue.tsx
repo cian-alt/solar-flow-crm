@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Check } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatEuro } from '@/lib/utils';
-import { parseISO, format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { parseISO, format } from 'date-fns';
+import { monthsBetween } from '@/lib/contractRevenue';
 
 interface Phase {
   localId: string;
@@ -24,21 +25,9 @@ function newPhase(): Phase {
   return { localId: `p_${++_phaseCounter}`, monthly_price: '', start_date: '', end_date: '' };
 }
 
-function monthsBetween(start: string, end: string): number {
-  if (!start || !end) return 0;
-  try {
-    const s = parseISO(start);
-    const e = parseISO(end);
-    // Count inclusive months: e.g. Apr → Jun = 3 months
-    const diff = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
-    return Math.max(0, diff);
-  } catch {
-    return 0;
-  }
-}
-
 export default function ContractRevenue({ leadId }: ContractRevenueProps) {
   const supabaseRef = useRef(createClient());
+  const isMounted = useRef(true);
 
   const [contractId, setContractId] = useState<string | null>(null);
   const [onboardingFee, setOnboardingFee] = useState('');
@@ -46,6 +35,12 @@ export default function ContractRevenue({ leadId }: ContractRevenueProps) {
   const [phases, setPhases] = useState<Phase[]>([newPhase()]);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [loaded, setLoaded] = useState(false);
+
+  // Track mount state to avoid state updates after unmount
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   // Keep a ref to current state so the stable save() callback can read latest values
   const stateRef = useRef({ onboardingFee, paymentType, phases, contractId });
@@ -122,17 +117,22 @@ export default function ContractRevenue({ leadId }: ContractRevenueProps) {
       );
     }
 
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 2000);
-  }, [leadId]);
+    if (isMounted.current) {
+      setSaveStatus('saved');
+      setTimeout(() => { if (isMounted.current) setSaveStatus('idle'); }, 2000);
+    }
+  }, [leadId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced auto-save: fires 800ms after any data change
+  // Debounced auto-save: fires 800ms after any data change.
+  // `save` is intentionally omitted from deps — it's a stable useCallback([leadId]).
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!loaded) return;
-    setSaveStatus('saving');
+    if (isMounted.current) setSaveStatus('saving');
     const timer = setTimeout(() => { save(); }, 800);
     return () => clearTimeout(timer);
-  }, [onboardingFee, paymentType, phases, loaded]); // intentionally omit `save` — it's stable
+  }, [onboardingFee, paymentType, phases, loaded]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // ── Derived calculations ──────────────────────────────────────────
   const fee = Number(onboardingFee) || 0;
@@ -357,53 +357,3 @@ export default function ContractRevenue({ leadId }: ContractRevenueProps) {
   );
 }
 
-// Exported helper used by the dashboard to compute contract revenue for a given month
-export function contractRevenueForMonth(
-  contracts: Array<{
-    onboarding_fee: number | null;
-    payment_type: string;
-    phases: Array<{ monthly_price: number; start_date: string; end_date: string }>;
-    lead: { stage: string; updated_at: string } | null;
-  }>,
-  monthStart: Date,
-  monthEnd: Date
-): number {
-  let total = 0;
-  for (const contract of contracts) {
-    if (!contract.lead || contract.lead.stage !== 'Closed Won') continue;
-    const closedAt = new Date(contract.lead.updated_at);
-
-    if (contract.payment_type === 'upfront') {
-      // Entire contract value booked in the month the deal closed
-      if (closedAt >= monthStart && closedAt < monthEnd) {
-        total += contract.onboarding_fee ?? 0;
-        for (const phase of contract.phases ?? []) {
-          if (!phase.start_date || !phase.end_date) continue;
-          const m = monthsBetween(phase.start_date, phase.end_date);
-          total += (phase.monthly_price ?? 0) * m;
-        }
-      }
-    } else {
-      // Onboarding fee counts in the month the deal closed
-      if (closedAt >= monthStart && closedAt < monthEnd) {
-        total += contract.onboarding_fee ?? 0;
-      }
-      // Each phase contributes monthly_price in every month it overlaps
-      for (const phase of contract.phases ?? []) {
-        if (!phase.start_date || !phase.end_date) continue;
-        try {
-          const phaseStart = parseISO(phase.start_date);
-          const phaseEnd = parseISO(phase.end_date);
-          // Check if the middle of the target month falls within the phase
-          const midMonth = new Date((monthStart.getTime() + monthEnd.getTime()) / 2);
-          if (isWithinInterval(midMonth, { start: startOfDay(phaseStart), end: endOfDay(phaseEnd) })) {
-            total += phase.monthly_price ?? 0;
-          }
-        } catch {
-          // skip malformed dates
-        }
-      }
-    }
-  }
-  return total;
-}

@@ -12,7 +12,7 @@ import MyTasksToday from "@/components/dashboard/MyTasksToday";
 import FollowUpsToday from "@/components/dashboard/FollowUpsToday";
 import StaleLeads from "@/components/dashboard/StaleLeads";
 import { startOfMonth, subMonths, format } from "date-fns";
-import { contractRevenueForMonth } from "@/components/lead-detail/ContractRevenue";
+import { contractRevenueForMonth, contractsTotalRevenue, type ContractForRevenue } from "@/lib/contractRevenue";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -37,35 +37,13 @@ export default async function DashboardPage() {
 
   const allLeads = (leads ?? []) as Lead[];
 
-  // Normalise contracts — query may fail if table doesn't exist yet; treat as empty
-  type ContractRow = {
-    onboarding_fee: number | null;
-    payment_type: string;
-    phases: Array<{ monthly_price: number; start_date: string; end_date: string }>;
-    lead: { stage: string; updated_at: string } | null;
-  };
-  const contracts: ContractRow[] = (contractsRaw ?? []) as unknown as ContractRow[];
+  // Normalise contracts — treat as empty if the table doesn't exist yet or query fails
+  const contracts: ContractForRevenue[] = (contractsRaw ?? []) as unknown as ContractForRevenue[];
 
   // ── KPIs from leads ────────────────────────────────────────────────
   const closedWon = allLeads.filter(l => l.stage === "Closed Won");
   const leadsRevenue = closedWon.reduce((s, l) => s + (l.deal_value ?? 0), 0);
-
-  // ── KPIs from contracts ────────────────────────────────────────────
-  // Total all-time contract revenue
-  const contractsTotalRevenue = contracts.reduce((sum, c) => {
-    if (!c.lead || c.lead.stage !== "Closed Won") return sum;
-    const fee = c.onboarding_fee ?? 0;
-    const phasesTotal = (c.phases ?? []).reduce((ps, p) => {
-      if (!p.start_date || !p.end_date) return ps;
-      const months = monthsBetween(p.start_date, p.end_date);
-      return ps + (p.monthly_price ?? 0) * months;
-    }, 0);
-    if (c.payment_type === "upfront") return sum + fee + phasesTotal;
-    // monthly: onboarding + all future/past phases revenue
-    return sum + fee + phasesTotal;
-  }, 0);
-
-  const totalRevenue = leadsRevenue + contractsTotalRevenue;
+  const totalRevenue = leadsRevenue + contractsTotalRevenue(contracts);
 
   // This month revenue
   const thisMonthStart = startOfMonth(new Date());
@@ -161,15 +139,3 @@ export default async function DashboardPage() {
   );
 }
 
-// Helper: inclusive month count between two YYYY-MM-DD date strings
-function monthsBetween(start: string, end: string): number {
-  if (!start || !end) return 0;
-  try {
-    const s = new Date(start);
-    const e = new Date(end);
-    const diff = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
-    return Math.max(0, diff);
-  } catch {
-    return 0;
-  }
-}
