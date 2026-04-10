@@ -169,6 +169,29 @@ export interface Notification {
   lead?: Lead;
 }
 
+export type PaymentType = "monthly" | "upfront";
+
+export interface Contract {
+  id: string;
+  lead_id: string;
+  onboarding_fee: number | null;
+  payment_type: PaymentType;
+  created_at: string;
+  updated_at: string;
+  // Embedded
+  phases?: ContractPhase[];
+  lead?: Pick<Lead, 'id' | 'stage' | 'updated_at'>;
+}
+
+export interface ContractPhase {
+  id: string;
+  contract_id: string;
+  monthly_price: number;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+}
+
 // Dashboard types
 export interface KPIData {
   total_revenue_all_time: number;

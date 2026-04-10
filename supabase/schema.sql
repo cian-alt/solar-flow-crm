@@ -274,3 +274,48 @@ create trigger handle_updated_at before update on public.tasks
 -- insert into storage.buckets (id, name, public) values ('documents', 'documents', false);
 -- create policy "Authenticated users can upload" on storage.objects for insert with check (bucket_id = 'documents' and auth.role() = 'authenticated');
 -- create policy "Authenticated users can read" on storage.objects for select using (bucket_id = 'documents' and auth.role() = 'authenticated');
+
+-- =====================
+-- CONTRACT TABLES
+-- =====================
+-- Run these in your Supabase SQL editor after applying the main schema above.
+
+create type public.payment_type as enum ('monthly', 'upfront');
+
+create table if not exists public.contracts (
+  id uuid primary key default uuid_generate_v4(),
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  onboarding_fee numeric(12,2) default null,
+  payment_type public.payment_type not null default 'monthly',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (lead_id)
+);
+
+alter table public.contracts enable row level security;
+create policy "Authenticated users can manage contracts"
+  on public.contracts for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create table if not exists public.contract_phases (
+  id uuid primary key default uuid_generate_v4(),
+  contract_id uuid not null references public.contracts(id) on delete cascade,
+  monthly_price numeric(12,2) not null default 0,
+  start_date date not null,
+  end_date date not null,
+  created_at timestamptz not null default now(),
+  constraint contract_phases_dates_check check (end_date >= start_date)
+);
+
+alter table public.contract_phases enable row level security;
+create policy "Authenticated users can manage contract phases"
+  on public.contract_phases for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create index if not exists idx_contracts_lead_id on public.contracts(lead_id);
+create index if not exists idx_contract_phases_contract_id on public.contract_phases(contract_id);
+
+create trigger handle_updated_at before update on public.contracts
+  for each row execute procedure public.handle_updated_at();

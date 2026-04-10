@@ -16,6 +16,7 @@ import NotesTab from './tabs/NotesTab';
 import CallsTab from './tabs/CallsTab';
 import TasksTab from './tabs/TasksTab';
 import DocumentsTab from './tabs/DocumentsTab';
+import ContractRevenue from './ContractRevenue';
 
 type Tab = 'activity' | 'notes' | 'calls' | 'tasks' | 'documents';
 
@@ -124,6 +125,8 @@ export default function LeadDetailClient({ lead: initialLead, notes: initialNote
           </div>
         </motion.div>
       )}
+
+      {lead.stage === 'Closed Won' && <ContractRevenue leadId={lead.id} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left panel */}
