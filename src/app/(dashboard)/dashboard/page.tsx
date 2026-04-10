@@ -13,6 +13,8 @@ import FollowUpsToday from "@/components/dashboard/FollowUpsToday";
 import StaleLeads from "@/components/dashboard/StaleLeads";
 import { startOfMonth, subMonths, format } from "date-fns";
 import { contractRevenueForMonth, contractsTotalRevenue, type ContractForRevenue } from "@/lib/contractRevenue";
+import { calculateMRR, forecastRevenue } from "@/lib/revenue";
+import RevenueIntelligence from "@/components/dashboard/RevenueIntelligence";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -106,6 +108,9 @@ export default async function DashboardPage() {
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 5);
 
+  const mrrMetrics = calculateMRR(contracts);
+  const forecastData = forecastRevenue(contracts, allLeads, 3);
+
   const firstName = profile?.full_name?.split(" ")[0] ?? null;
 
   return (
@@ -118,6 +123,8 @@ export default async function DashboardPage() {
         activeLeads={activeLeads}
         conversionRate={conversionRate}
       />
+
+      <RevenueIntelligence mrrMetrics={mrrMetrics} forecastData={forecastData} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <MonthlyRevenueChart data={monthlyRevenue} />
