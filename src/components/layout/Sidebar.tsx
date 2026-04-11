@@ -12,6 +12,7 @@ import {
   Bell,
   Settings,
   LogOut,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -42,6 +43,8 @@ export default function Sidebar() {
   const router = useRouter();
   const { profile } = useUser();
   const [unreadCount, setUnreadCount] = useState(0);
+  const isAdmin = profile?.role === "admin";
+  const hrHref = isAdmin ? "/hr" : "/my-hr";
 
   const fetchUnreadCount = useCallback(async () => {
     const supabase = createClient();
@@ -120,6 +123,15 @@ export default function Sidebar() {
             active={isActive(item.href)}
           />
         ))}
+
+        {/* HR */}
+        <p className="px-3 pb-1 pt-4 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+          HR
+        </p>
+        <NavLink
+          item={{ label: isAdmin ? "HR Management" : "My HR", href: hrHref, icon: Briefcase }}
+          active={isActive(hrHref)}
+        />
 
         {/* Team / Settings group */}
         <p className="px-3 pb-1 pt-4 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">

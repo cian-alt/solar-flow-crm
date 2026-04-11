@@ -27,7 +27,12 @@ export type NotificationType =
   | "note_added"
   | "document_uploaded"
   | "task_due"
-  | "stale_lead";
+  | "stale_lead"
+  | "leave_request"
+  | "leave_approved"
+  | "leave_rejected"
+  | "commission_paid"
+  | "review_shared";
 
 export type TaskPriority = "low" | "medium" | "high";
 
@@ -190,6 +195,108 @@ export interface ContractPhase {
   start_date: string;
   end_date: string;
   created_at: string;
+}
+
+// ── HR Module Types ───────────────────────────────────────────────────────────
+
+export type CommissionType = "onboarding" | "retention";
+export type LeaveType =
+  | "annual"
+  | "sick"
+  | "unpaid"
+  | "maternity"
+  | "paternity"
+  | "parents"
+  | "force_majeure"
+  | "compassionate";
+export type LeaveStatus = "pending" | "approved" | "rejected";
+export type PayrollStatus = "draft" | "approved" | "paid";
+export type ReviewStatus = "draft" | "shared";
+
+export interface EmployeeProfile {
+  id: string; // fk → profiles
+  employee_number: string;
+  job_title: string | null;
+  department: string;
+  start_date: string | null;
+  base_salary: number | null;
+  payroll_frequency: string;
+  onboarding_commission_rate: number;
+  retention_commission_rate: number;
+  annual_leave_entitlement: number;
+  sick_leave_entitlement: number;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  iban: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommissionRecord {
+  id: string;
+  employee_id: string;
+  lead_id: string;
+  contract_id: string | null;
+  commission_type: CommissionType;
+  amount: number;
+  month_year: string;
+  is_paid: boolean;
+  paid_at: string | null;
+  notes: string | null;
+  created_at: string;
+  // joined
+  lead?: Pick<Lead, "id" | "company_name">;
+}
+
+export interface LeaveRequest {
+  id: string;
+  employee_id: string;
+  leave_type: LeaveType;
+  start_date: string;
+  end_date: string;
+  days_requested: number;
+  status: LeaveStatus;
+  reason: string | null;
+  admin_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  sick_note_url: string | null;
+  created_at: string;
+  updated_at: string;
+  // joined
+  employee?: Pick<Profile, "id" | "full_name" | "avatar_initials" | "avatar_url" | "email">;
+}
+
+export interface PayrollRecord {
+  id: string;
+  employee_id: string;
+  period_start: string;
+  period_end: string;
+  base_salary_portion: number;
+  onboarding_commission: number;
+  retention_commission: number;
+  total_gross: number;
+  total_net: number | null;
+  status: PayrollStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // joined
+  employee?: Pick<Profile, "id" | "full_name" | "avatar_initials">;
+}
+
+export interface PerformanceReview {
+  id: string;
+  employee_id: string;
+  reviewer_id: string;
+  review_period: string;
+  rating: number;
+  strengths: string | null;
+  improvements: string | null;
+  goals: string | null;
+  status: ReviewStatus;
+  created_at: string;
+  reviewer?: Pick<Profile, "id" | "full_name" | "avatar_initials">;
 }
 
 // Dashboard types

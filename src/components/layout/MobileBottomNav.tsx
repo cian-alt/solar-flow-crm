@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, BarChart3, Bell, Settings } from "lucide-react";
+import { LayoutDashboard, Users, BarChart3, Bell, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Leads", href: "/leads", icon: Users },
-  { label: "Reports", href: "/reports", icon: BarChart3 },
-  { label: "Alerts", href: "/notifications", icon: Bell },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
+import { useUser } from "@/context/UserContext";
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
+  const { profile } = useUser();
+  const isAdmin = profile?.role === "admin";
+
+  const navItems = [
+    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { label: "Leads", href: "/leads", icon: Users },
+    { label: "Reports", href: "/reports", icon: BarChart3 },
+    { label: "HR", href: isAdmin ? "/hr" : "/my-hr", icon: Briefcase },
+    { label: "Alerts", href: "/notifications", icon: Bell },
+  ];
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";

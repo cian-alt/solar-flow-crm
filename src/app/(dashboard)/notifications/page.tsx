@@ -8,13 +8,18 @@ import type { Notification, NotificationType } from '@/types/database';
 import { formatRelativeTime } from '@/lib/utils';
 import { isToday, isThisWeek, parseISO } from 'date-fns';
 
-const TYPE_MAP: Record<NotificationType, { Icon: React.ElementType; color: string }> = {
+const TYPE_MAP: Partial<Record<NotificationType, { Icon: React.ElementType; color: string }>> = {
   follow_up_due: { Icon: Calendar, color: '#F59E0B' },
   stage_change: { Icon: ArrowRight, color: '#7C3AED' },
   note_added: { Icon: FileText, color: '#1D4ED8' },
   document_uploaded: { Icon: Upload, color: '#7C3AED' },
   task_due: { Icon: CheckSquare, color: '#D97706' },
   stale_lead: { Icon: AlertCircle, color: '#F59E0B' },
+  leave_request: { Icon: Bell, color: '#1B3A6B' },
+  leave_approved: { Icon: Check, color: '#059669' },
+  leave_rejected: { Icon: AlertCircle, color: '#DC2626' },
+  commission_paid: { Icon: CheckSquare, color: '#059669' },
+  review_shared: { Icon: Bell, color: '#7C3AED' },
 };
 
 export default function NotificationsPage() {

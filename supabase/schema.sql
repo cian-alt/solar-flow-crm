@@ -319,3 +319,202 @@ create index if not exists idx_contract_phases_contract_id on public.contract_ph
 
 create trigger handle_updated_at before update on public.contracts
   for each row execute procedure public.handle_updated_at();
+
+-- =====================
+-- HR MODULE TABLES
+-- =====================
+
+-- Extend notifications type constraint to support HR notification types
+-- (Drop and recreate the check constraint if it exists)
+alter table public.notifications
+  drop constraint if exists notifications_type_check;
+
+alter table public.notifications
+  add constraint notifications_type_check
+  check (type in (
+    'follow_up_due','stage_change','note_added','document_uploaded','task_due','stale_lead',
+    'leave_request','leave_approved','leave_rejected','commission_paid','review_shared'
+  ));
+
+-- employee_profiles — one row per employee, keyed by profiles.id
+create table if not exists public.employee_profiles (
+  id uuid primary key references public.profiles(id) on delete cascade,
+  employee_number text not null,
+  job_title text,
+  department text not null default 'Sales',
+  start_date date,
+  base_salary numeric(12,2),
+  payroll_frequency text not null default 'monthly',
+  onboarding_commission_rate numeric(5,2) not null default 40,
+  retention_commission_rate numeric(5,2) not null default 5,
+  annual_leave_entitlement integer not null default 20,
+  sick_leave_entitlement integer not null default 10,
+  emergency_contact_name text,
+  emergency_contact_phone text,
+  iban text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (employee_number)
+);
+
+alter table public.employee_profiles enable row level security;
+create policy "Admins manage employee profiles"
+  on public.employee_profiles for all
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    or auth.uid() = id
+  )
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  );
+
+create trigger handle_updated_at before update on public.employee_profiles
+  for each row execute procedure public.handle_updated_at();
+
+-- commission_records
+create type if not exists public.commission_type_enum as enum ('onboarding', 'retention');
+
+create table if not exists public.commission_records (
+  id uuid primary key default uuid_generate_v4(),
+  employee_id uuid not null references public.profiles(id) on delete cascade,
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  contract_id uuid references public.contracts(id) on delete set null,
+  commission_type public.commission_type_enum not null,
+  amount numeric(12,2) not null default 0,
+  month_year date not null,
+  is_paid boolean not null default false,
+  paid_at timestamptz,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.commission_records enable row level security;
+create policy "Admins manage commissions; employees view own"
+  on public.commission_records for all
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    or auth.uid() = employee_id
+  )
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  );
+
+create index if not exists idx_commission_employee on public.commission_records(employee_id);
+create index if not exists idx_commission_month on public.commission_records(month_year);
+
+-- leave_requests
+create type if not exists public.leave_type_enum as enum (
+  'annual','sick','unpaid','maternity','paternity','parents','force_majeure','compassionate'
+);
+create type if not exists public.leave_status_enum as enum ('pending','approved','rejected');
+
+create table if not exists public.leave_requests (
+  id uuid primary key default uuid_generate_v4(),
+  employee_id uuid not null references public.profiles(id) on delete cascade,
+  leave_type public.leave_type_enum not null,
+  start_date date not null,
+  end_date date not null,
+  days_requested integer not null default 1,
+  status public.leave_status_enum not null default 'pending',
+  reason text,
+  admin_notes text,
+  reviewed_by uuid references public.profiles(id),
+  reviewed_at timestamptz,
+  sick_note_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint leave_dates_check check (end_date >= start_date)
+);
+
+alter table public.leave_requests enable row level security;
+create policy "Admins manage all leave; employees manage own"
+  on public.leave_requests for all
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    or auth.uid() = employee_id
+  )
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    or auth.uid() = employee_id
+  );
+
+create trigger handle_updated_at before update on public.leave_requests
+  for each row execute procedure public.handle_updated_at();
+
+create index if not exists idx_leave_employee on public.leave_requests(employee_id);
+create index if not exists idx_leave_status on public.leave_requests(status);
+
+-- payroll_records
+create type if not exists public.payroll_status_enum as enum ('draft','approved','paid');
+
+create table if not exists public.payroll_records (
+  id uuid primary key default uuid_generate_v4(),
+  employee_id uuid not null references public.profiles(id) on delete cascade,
+  period_start date not null,
+  period_end date not null,
+  base_salary_portion numeric(12,2) not null default 0,
+  onboarding_commission numeric(12,2) not null default 0,
+  retention_commission numeric(12,2) not null default 0,
+  total_gross numeric(12,2) not null default 0,
+  total_net numeric(12,2),
+  status public.payroll_status_enum not null default 'draft',
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.payroll_records enable row level security;
+create policy "Admins manage payroll; employees view own"
+  on public.payroll_records for all
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    or auth.uid() = employee_id
+  )
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  );
+
+create trigger handle_updated_at before update on public.payroll_records
+  for each row execute procedure public.handle_updated_at();
+
+create index if not exists idx_payroll_employee on public.payroll_records(employee_id);
+
+-- performance_reviews
+create type if not exists public.review_status_enum as enum ('draft','shared');
+
+create table if not exists public.performance_reviews (
+  id uuid primary key default uuid_generate_v4(),
+  employee_id uuid not null references public.profiles(id) on delete cascade,
+  reviewer_id uuid not null references public.profiles(id),
+  review_period text not null,
+  rating integer not null check (rating between 1 and 5),
+  strengths text,
+  improvements text,
+  goals text,
+  status public.review_status_enum not null default 'draft',
+  created_at timestamptz not null default now()
+);
+
+alter table public.performance_reviews enable row level security;
+create policy "Admins manage reviews; employees view shared own"
+  on public.performance_reviews for all
+  using (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    or (auth.uid() = employee_id and status = 'shared')
+  )
+  with check (
+    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  );
+
+create index if not exists idx_reviews_employee on public.performance_reviews(employee_id);
+
+-- Auto-generate employee_number function
+create or replace function public.next_employee_number()
+returns text language plpgsql as $$
+declare
+  n integer;
+begin
+  select count(*) + 1 into n from public.employee_profiles;
+  return 'SF-' || lpad(n::text, 3, '0');
+end;
+$$;
