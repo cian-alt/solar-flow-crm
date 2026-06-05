@@ -13,6 +13,7 @@ import {
   Settings,
   LogOut,
   Briefcase,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -29,6 +30,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Leads", href: "/leads", icon: Users },
+  { label: "Intelligence", href: "/intelligence", icon: Brain },
   { label: "Reports", href: "/reports", icon: BarChart3 },
 ];
 

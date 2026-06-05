@@ -518,3 +518,78 @@ begin
   return 'SF-' || lpad(n::text, 3, '0');
 end;
 $$;
+
+-- =====================
+-- LEAD INTELLIGENCE & SCORING
+-- =====================
+-- AI-powered lead intelligence fields. Run this block in your Supabase SQL editor.
+-- Idempotent: safe to run on an existing leads table.
+
+alter table public.leads
+  add column if not exists contractor_type text,
+  add column if not exists jobs_per_week integer,
+  add column if not exists annual_turnover text,
+  add column if not exists uses_existing_software boolean default false,
+  add column if not exists existing_software_name text,
+  add column if not exists linkedin_url text,
+  add column if not exists linkedin_activity text,
+  add column if not exists preferred_contact_method text,
+  add column if not exists decision_maker_identified boolean default false,
+  add column if not exists decision_maker_name text,
+  add column if not exists decision_maker_linkedin text,
+  add column if not exists num_employees integer,
+  add column if not exists county text,
+  add column if not exists researched_by uuid references public.profiles(id),
+  add column if not exists researched_at timestamp with time zone,
+  add column if not exists intelligence_score integer default 0,
+  add column if not exists intelligence_category text default 'Cold',
+  add column if not exists recommended_package text,
+  add column if not exists recommended_onboarding text,
+  add column if not exists estimated_mrr numeric default 0,
+  add column if not exists recommended_contact_method text,
+  add column if not exists ai_notes text;
+
+-- Constrain enum-like columns (drop-then-add so re-runs are safe)
+alter table public.leads drop constraint if exists leads_contractor_type_check;
+alter table public.leads add constraint leads_contractor_type_check
+  check (contractor_type is null or contractor_type in
+    ('Electrical','Plumbing','General','Solar','HVAC','Mechanical','Fit-out','Civil','Multi-trade'));
+
+alter table public.leads drop constraint if exists leads_annual_turnover_check;
+alter table public.leads add constraint leads_annual_turnover_check
+  check (annual_turnover is null or annual_turnover in
+    ('Under €500k','€500k-€1M','€1M-€5M','€5M-€10M','Over €10M'));
+
+alter table public.leads drop constraint if exists leads_linkedin_activity_check;
+alter table public.leads add constraint leads_linkedin_activity_check
+  check (linkedin_activity is null or linkedin_activity in
+    ('Very Active','Active','Occasional','Inactive','No Profile'));
+
+alter table public.leads drop constraint if exists leads_preferred_contact_method_check;
+alter table public.leads add constraint leads_preferred_contact_method_check
+  check (preferred_contact_method is null or preferred_contact_method in
+    ('Phone','LinkedIn','Email','WhatsApp','In Person'));
+
+alter table public.leads drop constraint if exists leads_intelligence_category_check;
+alter table public.leads add constraint leads_intelligence_category_check
+  check (intelligence_category is null or intelligence_category in
+    ('Hot','Warm','Nurture','Cold'));
+
+alter table public.leads drop constraint if exists leads_recommended_package_check;
+alter table public.leads add constraint leads_recommended_package_check
+  check (recommended_package is null or recommended_package in
+    ('Starter','Professional','Enterprise'));
+
+alter table public.leads drop constraint if exists leads_recommended_onboarding_check;
+alter table public.leads add constraint leads_recommended_onboarding_check
+  check (recommended_onboarding is null or recommended_onboarding in
+    ('Basic','Pro','Premium'));
+
+alter table public.leads drop constraint if exists leads_intelligence_score_check;
+alter table public.leads add constraint leads_intelligence_score_check
+  check (intelligence_score is null or (intelligence_score >= 0 and intelligence_score <= 100));
+
+create index if not exists leads_intelligence_category_idx on public.leads(intelligence_category);
+create index if not exists leads_intelligence_score_idx on public.leads(intelligence_score desc);
+create index if not exists leads_county_idx on public.leads(county);
+create index if not exists leads_contractor_type_idx on public.leads(contractor_type);
