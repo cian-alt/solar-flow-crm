@@ -1,0 +1,14 @@
+{
+  "id": "session-1775863533631",
+  "startedAt": "2026-04-10T23:25:33.631Z",
+  "cwd": "/Users/cianmurphy/Desktop/solar-flow-crm/solar-flow-app",
+  "context": {},
+  "metrics": {
+    "edits": 27,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "endedAt": "2026-04-17T18:45:27.086Z",
+  "duration": 587993456
+}

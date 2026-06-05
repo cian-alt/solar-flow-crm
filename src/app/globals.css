@@ -107,6 +107,47 @@ body {
 .score-amber { background: #FEF3C7; color: #D97706; }
 .score-green { background: #D1FAE5; color: #059669; }
 
+/* ── Lead Intelligence ─────────────────────────────────────────── */
+/* AI accent gradient (deep purple alongside the navy brand) */
+.ai-gradient {
+  background: linear-gradient(135deg, #4C1D95 0%, #6D28D9 50%, #1B3A6B 100%);
+}
+.ai-gradient-text {
+  background: linear-gradient(135deg, #4C1D95 0%, #6D28D9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Intelligence category glows for lead cards */
+.glow-hot {
+  border-color: rgba(220, 38, 38, 0.35);
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35), 0 8px 28px rgba(220, 38, 38, 0.18);
+}
+.glow-warm {
+  border-color: rgba(217, 119, 6, 0.32);
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.32), 0 8px 28px rgba(217, 119, 6, 0.16);
+}
+.glow-nurture {
+  border-color: rgba(37, 99, 235, 0.30);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.30), 0 8px 28px rgba(37, 99, 235, 0.14);
+}
+.glow-cold {
+  opacity: 0.92;
+  filter: grayscale(0.12);
+}
+
+/* Intelligence category pill colors */
+.cat-hot { background: #FEE2E2; color: #DC2626; }
+.cat-warm { background: #FEF3C7; color: #D97706; }
+.cat-nurture { background: #DBEAFE; color: #2563EB; }
+.cat-cold { background: #F1F5F9; color: #64748B; }
+
+/* Package badge colors — Starter (green), Professional (blue), Enterprise (purple) */
+.pkg-starter { background: #D1FAE5; color: #059669; }
+.pkg-professional { background: #DBEAFE; color: #1D4ED8; }
+.pkg-enterprise { background: #EDE9FE; color: #6D28D9; }
+
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

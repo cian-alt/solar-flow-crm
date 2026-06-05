@@ -16,9 +16,10 @@ import NotesTab from './tabs/NotesTab';
 import CallsTab from './tabs/CallsTab';
 import TasksTab from './tabs/TasksTab';
 import DocumentsTab from './tabs/DocumentsTab';
+import IntelligenceTab from './tabs/IntelligenceTab';
 import ContractRevenue from './ContractRevenue';
 
-type Tab = 'activity' | 'notes' | 'calls' | 'tasks' | 'documents';
+type Tab = 'intelligence' | 'activity' | 'notes' | 'calls' | 'tasks' | 'documents';
 
 interface Props {
   lead: Lead;
@@ -95,7 +96,15 @@ export default function LeadDetailClient({ lead: initialLead, notes: initialNote
     router.push('/leads');
   };
 
+  const engagement = {
+    hasCall: calls.length > 0,
+    hasNotes: notes.length > 0,
+    hasFollowUp: !!lead.follow_up_date,
+    hasAnsweredCall: calls.some(c => c.outcome === 'answered'),
+  };
+
   const TABS: { id: Tab; label: string; count?: number }[] = [
+    { id: 'intelligence', label: 'Intelligence' },
     { id: 'activity', label: 'Activity', count: activities.length },
     { id: 'notes', label: 'Notes', count: notes.length },
     { id: 'calls', label: 'Calls', count: calls.length },
@@ -225,6 +234,7 @@ export default function LeadDetailClient({ lead: initialLead, notes: initialNote
           <div className="flex-1 overflow-y-auto p-5">
             <AnimatePresence mode="wait">
               <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                {tab === 'intelligence' && <IntelligenceTab lead={lead} engagement={engagement} onLeadChange={u => setLead(l => ({ ...l, ...u }))} />}
                 {tab === 'activity' && <ActivityTimeline activities={activities} />}
                 {tab === 'notes' && <NotesTab notes={notes} leadId={lead.id} onNotesChange={n => { setNotes(n); recalcScore(); }} />}
                 {tab === 'calls' && <CallsTab calls={calls} leadId={lead.id} onCallsChange={c => { setCalls(c); recalcScore(); updateLead({ last_contacted_at: new Date().toISOString() }); }} />}

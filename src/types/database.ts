@@ -21,6 +21,45 @@ export type LeadSource =
 
 export type CompanySize = "1-10" | "11-50" | "51-200" | "201-500" | "500+";
 
+// ── Lead Intelligence enums ───────────────────────────────────────────────────
+export type ContractorType =
+  | "Electrical"
+  | "Plumbing"
+  | "General"
+  | "Solar"
+  | "HVAC"
+  | "Mechanical"
+  | "Fit-out"
+  | "Civil"
+  | "Multi-trade";
+
+export type AnnualTurnover =
+  | "Under €500k"
+  | "€500k-€1M"
+  | "€1M-€5M"
+  | "€5M-€10M"
+  | "Over €10M";
+
+export type LinkedInActivity =
+  | "Very Active"
+  | "Active"
+  | "Occasional"
+  | "Inactive"
+  | "No Profile";
+
+export type ContactMethod =
+  | "Phone"
+  | "LinkedIn"
+  | "Email"
+  | "WhatsApp"
+  | "In Person";
+
+export type IntelligenceCategory = "Hot" | "Warm" | "Nurture" | "Cold";
+
+export type RecommendedPackage = "Starter" | "Professional" | "Enterprise";
+
+export type RecommendedOnboarding = "Basic" | "Pro" | "Premium";
+
 export type NotificationType =
   | "follow_up_due"
   | "stage_change"
@@ -95,8 +134,33 @@ export interface Lead {
   last_contacted_at: string | null;
   created_at: string;
   updated_at: string;
+  // ── Lead Intelligence research fields ──
+  contractor_type: ContractorType | null;
+  jobs_per_week: number | null;
+  annual_turnover: AnnualTurnover | null;
+  uses_existing_software: boolean | null;
+  existing_software_name: string | null;
+  linkedin_url: string | null;
+  linkedin_activity: LinkedInActivity | null;
+  preferred_contact_method: ContactMethod | null;
+  decision_maker_identified: boolean | null;
+  decision_maker_name: string | null;
+  decision_maker_linkedin: string | null;
+  num_employees: number | null;
+  county: string | null;
+  researched_by: string | null;
+  researched_at: string | null;
+  // ── AI-calculated intelligence fields ──
+  intelligence_score: number | null;
+  intelligence_category: IntelligenceCategory | null;
+  recommended_package: RecommendedPackage | null;
+  recommended_onboarding: RecommendedOnboarding | null;
+  estimated_mrr: number | null;
+  recommended_contact_method: string | null;
+  ai_notes: string | null;
   // Joined
   assigned_profile?: Profile;
+  researched_profile?: Profile;
 }
 
 export interface Note {
