@@ -593,3 +593,226 @@ create index if not exists leads_intelligence_category_idx on public.leads(intel
 create index if not exists leads_intelligence_score_idx on public.leads(intelligence_score desc);
 create index if not exists leads_county_idx on public.leads(county);
 create index if not exists leads_contractor_type_idx on public.leads(contractor_type);
+
+-- =====================
+-- CUSTOMER ONBOARDING MODULE
+-- =====================
+-- Run this whole block in your Supabase SQL editor. Idempotent where practical.
+
+-- Extend notification types for onboarding events
+alter table public.notifications drop constraint if exists notifications_type_check;
+alter table public.notifications add constraint notifications_type_check
+  check (type in (
+    'follow_up_due','stage_change','note_added','document_uploaded','task_due','stale_lead',
+    'leave_request','leave_approved','leave_rejected','commission_paid','review_shared',
+    'onboarding_created','onboarding_step_complete','training_scheduled','training_booked',
+    'onboarding_overdue','onboarding_go_live'
+  ));
+
+-- ── onboardings ───────────────────────────────────────────────────────────────
+create table if not exists public.onboardings (
+  id uuid primary key default uuid_generate_v4(),
+  lead_id uuid references public.leads(id) on delete set null,
+  deal_id uuid, -- no deals table yet; kept nullable for forward-compat
+  client_company_name text not null,
+  client_contact_name text,
+  client_contact_email text,
+  client_contact_phone text,
+  onboarding_package text not null default 'Basic'
+    check (onboarding_package in ('Basic','Pro','Premium')),
+  status text not null default 'not_started'
+    check (status in ('not_started','in_progress','completed','on_hold')),
+  assigned_am uuid references public.profiles(id),
+  portal_token uuid not null unique default uuid_generate_v4(),
+  portal_last_viewed timestamptz,
+  departments jsonb not null default '["Admin","Sales","Operations","Wiring"]'::jsonb,
+  sla_signed boolean not null default false,
+  sla_signed_at timestamptz,
+  subscription_activated boolean not null default false,
+  subscription_activated_at timestamptz,
+  payment_link_sent boolean not null default false,
+  payment_link_sent_at timestamptz,
+  go_live_date date,
+  internal_notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (lead_id)
+);
+
+alter table public.onboardings enable row level security;
+create policy "Authenticated manage onboardings" on public.onboardings
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create index if not exists onboardings_status_idx on public.onboardings(status);
+create index if not exists onboardings_assigned_am_idx on public.onboardings(assigned_am);
+create index if not exists onboardings_portal_token_idx on public.onboardings(portal_token);
+
+-- ── onboarding_steps ──────────────────────────────────────────────────────────
+create table if not exists public.onboarding_steps (
+  id uuid primary key default uuid_generate_v4(),
+  onboarding_id uuid not null references public.onboardings(id) on delete cascade,
+  step_type text not null
+    check (step_type in ('sla_signing','payment','portal_activation','department_emails',
+      'training_schedule','training_session','handover','go_live','account_setup','am_intro','custom')),
+  title text not null,
+  description text,
+  department text,
+  status text not null default 'pending'
+    check (status in ('pending','in_progress','completed','skipped')),
+  assigned_to uuid references public.profiles(id),
+  due_date date,
+  completed_at timestamptz,
+  completed_by uuid references public.profiles(id),
+  order_index integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.onboarding_steps enable row level security;
+create policy "Authenticated manage onboarding steps" on public.onboarding_steps
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create index if not exists onboarding_steps_onboarding_idx on public.onboarding_steps(onboarding_id, order_index);
+
+-- ── training_sessions ─────────────────────────────────────────────────────────
+create table if not exists public.training_sessions (
+  id uuid primary key default uuid_generate_v4(),
+  onboarding_id uuid not null references public.onboardings(id) on delete cascade,
+  onboarding_step_id uuid references public.onboarding_steps(id) on delete set null,
+  department text,
+  session_type text not null default 'online' check (session_type in ('online','in_person')),
+  session_number integer,
+  title text not null,
+  scheduled_date timestamptz,
+  duration_minutes integer not null default 60,
+  location_or_link text,
+  trainer uuid references public.profiles(id),
+  attendees text,
+  status text not null default 'scheduled'
+    check (status in ('scheduled','completed','cancelled','rescheduled')),
+  client_can_book boolean not null default false,
+  available_slots jsonb not null default '[]'::jsonb,
+  notes text,
+  recording_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.training_sessions enable row level security;
+create policy "Authenticated manage training sessions" on public.training_sessions
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create index if not exists training_sessions_onboarding_idx on public.training_sessions(onboarding_id);
+
+-- ── onboarding_documents ──────────────────────────────────────────────────────
+create table if not exists public.onboarding_documents (
+  id uuid primary key default uuid_generate_v4(),
+  onboarding_id uuid not null references public.onboardings(id) on delete cascade,
+  document_type text not null default 'other'
+    check (document_type in ('sla','welcome_pack','training_guide','setup_guide','department_guide','other')),
+  title text not null,
+  file_url text not null,
+  uploaded_by uuid references public.profiles(id),
+  visible_to_client boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table public.onboarding_documents enable row level security;
+create policy "Authenticated manage onboarding documents" on public.onboarding_documents
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create index if not exists onboarding_documents_onboarding_idx on public.onboarding_documents(onboarding_id);
+
+-- updated_at triggers
+create trigger handle_updated_at before update on public.onboardings
+  for each row execute procedure public.handle_updated_at();
+create trigger handle_updated_at before update on public.onboarding_steps
+  for each row execute procedure public.handle_updated_at();
+create trigger handle_updated_at before update on public.training_sessions
+  for each row execute procedure public.handle_updated_at();
+
+-- =====================
+-- CLIENT PORTAL RPCs (SECURITY DEFINER — token-scoped, callable by anon)
+-- =====================
+
+-- Read the full portal payload for a token (internal_notes excluded).
+create or replace function public.portal_get_onboarding(p_token uuid)
+returns json language sql security definer set search_path = public stable as $$
+  select case when o.id is null then null else json_build_object(
+    'onboarding', to_jsonb(o) - 'internal_notes',
+    'am', (select json_build_object(
+              'full_name', p.full_name, 'email', p.email,
+              'avatar_initials', p.avatar_initials, 'role_title', p.role_title)
+            from public.profiles p where p.id = o.assigned_am),
+    'steps', (select coalesce(json_agg(s order by s.order_index), '[]')
+              from public.onboarding_steps s where s.onboarding_id = o.id),
+    'training', (select coalesce(json_agg(t order by t.scheduled_date nulls last), '[]')
+                 from public.training_sessions t where t.onboarding_id = o.id),
+    'documents', (select coalesce(json_agg(d order by d.created_at desc), '[]')
+                  from public.onboarding_documents d
+                  where d.onboarding_id = o.id and d.visible_to_client = true)
+  ) end
+  from public.onboardings o where o.portal_token = p_token;
+$$;
+
+-- Stamp portal_last_viewed.
+create or replace function public.portal_log_view(p_token uuid)
+returns void language sql security definer set search_path = public volatile as $$
+  update public.onboardings set portal_last_viewed = now() where portal_token = p_token;
+$$;
+
+-- Client books a bookable training slot.
+create or replace function public.portal_book_slot(p_token uuid, p_session_id uuid, p_slot timestamptz)
+returns json language plpgsql security definer set search_path = public volatile as $$
+declare
+  v_onb public.onboardings;
+  v_sess public.training_sessions;
+begin
+  select * into v_onb from public.onboardings where portal_token = p_token;
+  if v_onb.id is null then return json_build_object('ok', false, 'error', 'invalid token'); end if;
+
+  select * into v_sess from public.training_sessions
+    where id = p_session_id and onboarding_id = v_onb.id and client_can_book = true;
+  if v_sess.id is null then return json_build_object('ok', false, 'error', 'session not bookable'); end if;
+
+  update public.training_sessions
+    set scheduled_date = p_slot, status = 'scheduled', client_can_book = false, updated_at = now()
+    where id = p_session_id;
+
+  if v_onb.assigned_am is not null then
+    insert into public.notifications (user_id, type, title, message, lead_id)
+    values (v_onb.assigned_am, 'training_booked', 'Client booked a training slot',
+      v_onb.client_company_name || ' booked ' || coalesce(v_sess.title, 'a session'), v_onb.lead_id);
+  end if;
+  return json_build_object('ok', true);
+end;
+$$;
+
+-- Client signs the SLA from the portal.
+create or replace function public.portal_sign_sla(p_token uuid)
+returns json language plpgsql security definer set search_path = public volatile as $$
+declare
+  v_onb public.onboardings;
+begin
+  select * into v_onb from public.onboardings where portal_token = p_token;
+  if v_onb.id is null then return json_build_object('ok', false, 'error', 'invalid token'); end if;
+
+  update public.onboardings set sla_signed = true, sla_signed_at = now(), updated_at = now()
+    where id = v_onb.id;
+  update public.onboarding_steps
+    set status = 'completed', completed_at = now(), updated_at = now()
+    where onboarding_id = v_onb.id and step_type = 'sla_signing' and status <> 'completed';
+
+  if v_onb.assigned_am is not null then
+    insert into public.notifications (user_id, type, title, message, lead_id)
+    values (v_onb.assigned_am, 'onboarding_step_complete', 'SLA signed',
+      v_onb.client_company_name || ' signed the SLA', v_onb.lead_id);
+  end if;
+  return json_build_object('ok', true);
+end;
+$$;
+
+grant execute on function public.portal_get_onboarding(uuid) to anon, authenticated;
+grant execute on function public.portal_log_view(uuid) to anon, authenticated;
+grant execute on function public.portal_book_slot(uuid, uuid, timestamptz) to anon, authenticated;
+grant execute on function public.portal_sign_sla(uuid) to anon, authenticated;

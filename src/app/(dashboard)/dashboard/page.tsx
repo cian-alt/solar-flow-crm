@@ -15,6 +15,10 @@ import { startOfMonth, subMonths, format } from "date-fns";
 import { contractRevenueForMonth, contractsTotalRevenue, type ContractForRevenue } from "@/lib/contractRevenue";
 import { calculateMRR, forecastRevenue } from "@/lib/revenue";
 import RevenueIntelligence from "@/components/dashboard/RevenueIntelligence";
+import OnboardingWidgets from "@/components/dashboard/OnboardingWidgets";
+import { isStepOverdue } from "@/lib/onboarding";
+import { addDays } from "date-fns";
+import type { Onboarding, OnboardingStep } from "@/types/database";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -28,6 +32,8 @@ export default async function DashboardPage() {
     { data: tasks },
     { data: profiles },
     { data: contractsRaw },
+    { data: onboardingsRaw },
+    { data: onboardingStepsRaw },
   ] = await Promise.all([
     supabase.from("leads").select("*, assigned_profile:profiles!assigned_to(id,full_name,avatar_initials)"),
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle<Profile>(),
@@ -35,6 +41,8 @@ export default async function DashboardPage() {
     supabase.from("tasks").select("*, lead:leads(id,company_name)").eq("assigned_to", user.id).eq("completed", false).lte("due_date", new Date().toISOString().split("T")[0]),
     supabase.from("profiles").select("*"),
     supabase.from("contracts").select("id, lead_id, onboarding_fee, payment_type, phases:contract_phases(monthly_price, start_date, end_date), lead:leads!lead_id(id, stage, updated_at)"),
+    supabase.from("onboardings").select("id, client_company_name, status, go_live_date"),
+    supabase.from("onboarding_steps").select("status, due_date"),
   ]);
 
   const allLeads = (leads ?? []) as Lead[];
@@ -113,6 +121,17 @@ export default async function DashboardPage() {
 
   const firstName = profile?.full_name?.split(" ")[0] ?? null;
 
+  // ── Onboarding widgets ─────────────────────────────────────────────
+  const onboardings = (onboardingsRaw ?? []) as Pick<Onboarding, "id" | "client_company_name" | "status" | "go_live_date">[];
+  const onboardingSteps = (onboardingStepsRaw ?? []) as Pick<OnboardingStep, "status" | "due_date">[];
+  const activeOnboardings = onboardings.filter((o) => o.status === "not_started" || o.status === "in_progress").length;
+  const overdueSteps = onboardingSteps.filter((s) => isStepOverdue(s)).length;
+  const weekAhead = format(addDays(new Date(), 7), "yyyy-MM-dd");
+  const goingLive = onboardings
+    .filter((o) => o.status !== "completed" && o.go_live_date && o.go_live_date >= today && o.go_live_date <= weekAhead)
+    .map((o) => ({ id: o.id, name: o.client_company_name, date: o.go_live_date }))
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+
   return (
     <div className="space-y-6">
       <GreetingHeader firstName={firstName} />
@@ -125,6 +144,8 @@ export default async function DashboardPage() {
       />
 
       <RevenueIntelligence mrrMetrics={mrrMetrics} forecastData={forecastData} />
+
+      <OnboardingWidgets active={activeOnboardings} overdue={overdueSteps} goingLive={goingLive} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <MonthlyRevenueChart data={monthlyRevenue} />

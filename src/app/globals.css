@@ -148,6 +148,28 @@ body {
 .pkg-professional { background: #DBEAFE; color: #1D4ED8; }
 .pkg-enterprise { background: #EDE9FE; color: #6D28D9; }
 
+/* ── Onboarding ─────────────────────────────────────────────────── */
+/* Onboarding package badges — Basic (grey), Pro (blue), Premium (gold/amber) */
+.pkg-basic { background: #F1F5F9; color: #475569; }
+.pkg-pro { background: #DBEAFE; color: #1D4ED8; }
+.pkg-premium { background: #FEF3C7; color: #B45309; }
+
+/* Onboarding status pills */
+.onb-not_started { background: #F1F5F9; color: #64748B; }
+.onb-in_progress { background: #DBEAFE; color: #2563EB; }
+.onb-completed { background: #D1FAE5; color: #059669; }
+.onb-on_hold { background: #FEF3C7; color: #D97706; }
+
+/* Self-drawing checkmark when a step is completed */
+@keyframes draw-check {
+  to { stroke-dashoffset: 0; }
+}
+.check-draw {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: draw-check 0.4s ease-out forwards;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
