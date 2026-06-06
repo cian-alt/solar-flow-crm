@@ -17,9 +17,8 @@ import CallsTab from './tabs/CallsTab';
 import TasksTab from './tabs/TasksTab';
 import DocumentsTab from './tabs/DocumentsTab';
 import IntelligenceTab from './tabs/IntelligenceTab';
-import ContractRevenue from './ContractRevenue';
 import CloseDealModal from './CloseDealModal';
-import DealDetailsCard from './DealDetailsCard';
+import DealContractSection from './DealContractSection';
 
 type Tab = 'intelligence' | 'activity' | 'notes' | 'calls' | 'tasks' | 'documents';
 
@@ -142,14 +141,12 @@ export default function LeadDetailClient({ lead: initialLead, notes: initialNote
       )}
 
       {lead.stage === 'Closed Won' && (
-        <DealDetailsCard
+        <DealContractSection
           key={dealRefreshKey}
-          leadId={lead.id}
+          lead={lead}
           onEditDeal={() => setDealModalOpen(true)}
         />
       )}
-
-      {lead.stage === 'Closed Won' && <ContractRevenue leadId={lead.id} />}
 
       <CloseDealModal
         lead={lead}

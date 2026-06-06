@@ -864,3 +864,70 @@ alter table public.contracts add constraint contracts_onboarding_package_check
 alter table public.contracts drop constraint if exists contracts_sla_status_check;
 alter table public.contracts add constraint contracts_sla_status_check
   check (sla_status in ('draft','sent','signed'));
+
+-- =====================
+-- SLA SIGNING (run on existing databases)
+-- =====================
+alter table public.contracts
+  add column if not exists sign_token uuid not null default uuid_generate_v4(),
+  add column if not exists signed_at timestamptz,
+  add column if not exists signer_name text,
+  add column if not exists signer_title text,
+  add column if not exists signer_ip text,
+  add column if not exists signature_url text,
+  add column if not exists viewed_at timestamptz,
+  add column if not exists special_conditions text;
+
+create unique index if not exists contracts_sign_token_idx on public.contracts(sign_token);
+
+-- Public (anon) signing RPCs — token-scoped, SECURITY DEFINER.
+create or replace function public.sign_get_contract(p_token uuid)
+returns json language sql security definer set search_path = public stable as $$
+  select case when c.id is null then null else json_build_object(
+    'contract', to_jsonb(c),
+    'phases', (select coalesce(json_agg(p order by p.start_date), '[]') from public.contract_phases p where p.contract_id = c.id),
+    'company', coalesce(c.official_company_name, l.company_name),
+    'lead', json_build_object('company_name', l.company_name, 'contact_name', l.contact_name, 'email', l.email, 'phone', l.phone),
+    'am', (select json_build_object('full_name', pr.full_name, 'email', pr.email, 'avatar_initials', pr.avatar_initials) from public.profiles pr where pr.id = l.assigned_to),
+    'onboarding', (select json_build_object('id', o.id, 'sla_signed', o.sla_signed) from public.onboardings o where o.id = c.onboarding_id)
+  ) end
+  from public.contracts c join public.leads l on l.id = c.lead_id
+  where c.sign_token = p_token;
+$$;
+
+create or replace function public.sign_log_view(p_token uuid)
+returns void language sql security definer set search_path = public volatile as $$
+  update public.contracts set viewed_at = now() where sign_token = p_token and viewed_at is null;
+$$;
+
+create or replace function public.sign_submit_sla(p_token uuid, p_name text, p_title text, p_signature_url text, p_ip text)
+returns json language plpgsql security definer set search_path = public volatile as $$
+declare c public.contracts; am public.profiles;
+begin
+  select * into c from public.contracts where sign_token = p_token;
+  if c.id is null then return json_build_object('ok', false, 'error', 'invalid token'); end if;
+
+  update public.contracts
+    set signed_at = now(), signer_name = p_name, signer_title = p_title, signer_ip = p_ip,
+        signature_url = p_signature_url, sla_status = 'signed', updated_at = now()
+    where id = c.id;
+
+  if c.onboarding_id is not null then
+    update public.onboardings set sla_signed = true, sla_signed_at = now(), updated_at = now() where id = c.onboarding_id;
+    update public.onboarding_steps set status = 'completed', completed_at = now(), updated_at = now()
+      where onboarding_id = c.onboarding_id and step_type = 'sla_signing' and status <> 'completed';
+  end if;
+
+  select p.* into am from public.profiles p join public.leads l on l.assigned_to = p.id where l.id = c.lead_id;
+
+  insert into public.notifications (user_id, type, title, message, lead_id)
+    select id, 'onboarding_step_complete', 'SLA signed ✍️', coalesce(c.official_company_name, 'A client') || ' has signed their SLA!', c.lead_id
+    from public.profiles where role = 'admin';
+
+  return json_build_object('ok', true, 'company', coalesce(c.official_company_name, ''), 'am_name', am.full_name, 'am_email', am.email);
+end;
+$$;
+
+grant execute on function public.sign_get_contract(uuid) to anon, authenticated;
+grant execute on function public.sign_log_view(uuid) to anon, authenticated;
+grant execute on function public.sign_submit_sla(uuid, text, text, text, text) to anon, authenticated;

@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from "react";
 import { Plus, Clock, CalendarClock, CalendarPlus } from "lucide-react";
 import type { Onboarding, TrainingSession, Profile } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
@@ -8,7 +7,6 @@ import { TRAINING_STATUS_META, departmentColor, trainingTypeMeta } from "../help
 import { cn, formatDateTime } from "@/lib/utils";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
-import ScheduleSessionModal from "../ScheduleSessionModal";
 import toast from "react-hot-toast";
 
 interface Props {
@@ -16,23 +14,20 @@ interface Props {
   sessions: TrainingSession[];
   profiles: Profile[];
   onSessionsChange: (s: TrainingSession[]) => void;
+  onOpenSchedule: (session: TrainingSession | null) => void;
+  onSync: () => void;
 }
 
-export default function TrainingTab({ onboarding, sessions, profiles, onSessionsChange }: Props) {
+export default function TrainingTab({ sessions, profiles, onSessionsChange, onOpenSchedule, onSync }: Props) {
   const supabase = createClient();
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [editingSession, setEditingSession] = useState<TrainingSession | null>(null);
 
   const patch = async (id: string, updates: Partial<TrainingSession>) => {
     onSessionsChange(sessions.map((s) => (s.id === id ? { ...s, ...updates } : s)));
     await supabase.from("training_sessions").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
+    if (updates.status) onSync(); // keep the linked onboarding step in sync
   };
 
-  const upsert = (saved: TrainingSession) => {
-    onSessionsChange(sessions.some((s) => s.id === saved.id) ? sessions.map((s) => (s.id === saved.id ? saved : s)) : [...sessions, saved]);
-  };
-
-  const openSchedule = (session: TrainingSession | null) => { setEditingSession(session); setScheduleOpen(true); };
+  const openSchedule = onOpenSchedule;
 
   // group by department
   const groups = sessions.reduce<Record<string, TrainingSession[]>>((acc, s) => {
@@ -124,15 +119,6 @@ export default function TrainingTab({ onboarding, sessions, profiles, onSessions
           </div>
         ))
       )}
-
-      <ScheduleSessionModal
-        isOpen={scheduleOpen}
-        onClose={() => { setScheduleOpen(false); setEditingSession(null); }}
-        onboarding={onboarding}
-        profiles={profiles}
-        session={editingSession}
-        onSaved={upsert}
-      />
     </div>
   );
 }

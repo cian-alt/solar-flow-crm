@@ -273,6 +273,15 @@ export interface Contract {
   sla_document_url: string | null;
   onboarding_id: string | null;
   is_draft: boolean | null;
+  // ── SLA signing ──
+  sign_token: string | null;
+  signed_at: string | null;
+  signer_name: string | null;
+  signer_title: string | null;
+  signer_ip: string | null;
+  signature_url: string | null;
+  viewed_at: string | null;
+  special_conditions: string | null;
   created_at: string;
   updated_at: string;
   // Embedded

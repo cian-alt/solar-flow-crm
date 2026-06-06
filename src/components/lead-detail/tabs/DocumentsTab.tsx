@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { Upload, FileText, File, Trash2, Download } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { uploadDocument } from '@/lib/storage';
 import { formatRelativeTime } from '@/lib/utils';
 import type { Document, DocumentType } from '@/types/database';
 import toast from 'react-hot-toast';
@@ -36,19 +37,15 @@ export default function DocumentsTab({ documents, leadId, onDocsChange }: Props)
     if (!user) { setUploading(false); return; }
 
     const fileName = `${leadId}/${Date.now()}-${file.name}`;
-    const { error: storageError } = await supabase.storage
-      .from('documents').upload(fileName, file);
-
-    if (storageError) {
-      toast.error('Upload failed — ensure Supabase Storage bucket "documents" exists');
+    const up = await uploadDocument(supabase, file, fileName);
+    if (up.error || !up.url) {
+      toast.error(up.error ?? 'Upload failed');
       setUploading(false); return;
     }
 
-    const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(fileName);
-
     const { data, error } = await supabase.from('documents').insert({
       lead_id: leadId, uploaded_by: user.id, name: file.name,
-      file_url: publicUrl, file_size: file.size,
+      file_url: up.url, file_size: file.size,
       file_type: file.type, document_type: docType,
     }).select('*, uploader:profiles!uploaded_by(id,full_name,avatar_initials)').single();
 

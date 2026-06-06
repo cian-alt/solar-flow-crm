@@ -6,8 +6,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Copy, Send, ListChecks, GraduationCap, FileText, Activity as ActivityIcon, Rocket } from "lucide-react";
 import type { Onboarding, OnboardingStep, TrainingSession, OnboardingDocument, Profile, OnboardingStatus } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
-import { onboardingProgress, PACKAGE_META } from "@/lib/onboarding";
+import { onboardingProgress, PACKAGE_META, syncStepsWithTraining } from "@/lib/onboarding";
 import { ONBOARDING_STATUS_META, progressColor } from "./helpers";
+import ScheduleSessionModal from "./ScheduleSessionModal";
 import { cn, formatDate } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import Modal from "@/components/ui/Modal";
@@ -42,8 +43,31 @@ export default function OnboardingDetailClient({ onboarding: initial, initialSte
   const [sendTo, setSendTo] = useState("");
   const [sendSubject, setSendSubject] = useState("");
   const [sendBody, setSendBody] = useState("");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleSession, setScheduleSession] = useState<TrainingSession | null>(null);
 
   useEffect(() => { setOrigin(window.location.origin); }, []);
+
+  const STEP_SELECT = "*, assignee:profiles!assigned_to(id,full_name,avatar_initials), completer:profiles!completed_by(id,full_name,avatar_initials)";
+
+  // Sync step statuses with their training sessions, then refresh steps.
+  const resyncSteps = async () => {
+    await syncStepsWithTraining(supabase, onboarding.id);
+    const { data } = await supabase.from("onboarding_steps").select(STEP_SELECT).eq("onboarding_id", onboarding.id).order("order_index");
+    if (data) setSteps(data as OnboardingStep[]);
+  };
+
+  useEffect(() => { resyncSteps(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  // Map of step id → its training session (for the Steps timeline).
+  const trainingByStepId = new Map<string, TrainingSession>();
+  for (const s of training) if (s.onboarding_step_id) trainingByStepId.set(s.onboarding_step_id, s);
+
+  const openSchedule = (session: TrainingSession | null) => { setScheduleSession(session); setScheduleOpen(true); };
+  const onSessionSaved = (saved: TrainingSession) => {
+    setTraining((prev) => prev.some((s) => s.id === saved.id) ? prev.map((s) => (s.id === saved.id ? saved : s)) : [...prev, saved]);
+    resyncSteps();
+  };
 
   const portalUrl = origin ? `${origin}/portal/${onboarding.portal_token}` : "";
   const { completed, total, pct } = onboardingProgress(steps);
@@ -178,13 +202,15 @@ export default function OnboardingDetailClient({ onboarding: initial, initialSte
               onboarding={onboarding}
               steps={steps}
               profiles={profiles}
+              trainingByStepId={trainingByStepId}
+              onScheduleTraining={openSchedule}
               onStepsChange={setSteps}
               onOnboardingChange={updateOnboarding}
               onDocAdded={(d) => setDocuments((prev) => [d, ...prev])}
             />
           )}
           {tab === "training" && (
-            <TrainingTab onboarding={onboarding} sessions={training} profiles={profiles} onSessionsChange={setTraining} />
+            <TrainingTab onboarding={onboarding} sessions={training} profiles={profiles} onSessionsChange={setTraining} onOpenSchedule={openSchedule} onSync={resyncSteps} />
           )}
           {tab === "documents" && (
             <OnbDocumentsTab onboarding={onboarding} documents={documents} onDocumentsChange={setDocuments} />
@@ -208,6 +234,15 @@ export default function OnboardingDetailClient({ onboarding: initial, initialSte
           </div>
         </div>
       </Modal>
+
+      <ScheduleSessionModal
+        isOpen={scheduleOpen}
+        onClose={() => { setScheduleOpen(false); setScheduleSession(null); }}
+        onboarding={onboarding}
+        profiles={profiles}
+        session={scheduleSession}
+        onSaved={onSessionSaved}
+      />
     </div>
   );
 }
