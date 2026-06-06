@@ -31,8 +31,8 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Public routes
-  const publicRoutes = ["/login", "/signup", "/forgot-password"];
+  // Public routes (client onboarding portal needs no auth)
+  const publicRoutes = ["/login", "/signup", "/forgot-password", "/portal", "/sign"];
   const isPublicRoute = publicRoutes.some((r) => pathname.startsWith(r));
 
   if (!user && !isPublicRoute) {
@@ -41,7 +41,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicRoute) {
+  // Authed users shouldn't sit on auth screens — but they CAN preview portals.
+  const authRoutes = ["/login", "/signup", "/forgot-password"];
+  if (user && authRoutes.some((r) => pathname.startsWith(r))) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);

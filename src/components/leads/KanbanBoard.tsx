@@ -18,6 +18,7 @@ import { KanbanColumn } from './KanbanColumn';
 import { LeadCard } from './LeadCard';
 import { STAGE_ORDER } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import { ensureOnboardingForLead } from '@/lib/onboarding';
 import toast from 'react-hot-toast';
 
 interface KanbanBoardProps {
@@ -110,6 +111,8 @@ export default function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) 
       // Trigger confetti for Closed Won (handled in lead detail, but toast here)
       if (newStage === 'Closed Won') {
         toast.success(`🎉 ${lead.company_name} — Closed Won!`);
+        const res = await ensureOnboardingForLead(supabase, { ...lead, stage: newStage });
+        if (res.onboarding && !res.existed) toast.success('Onboarding created for this client');
       }
     }
 

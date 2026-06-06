@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import type { Lead, Note, Activity, Call, Task, Document, Profile, LeadStage } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
+import { ensureOnboardingForLead } from '@/lib/onboarding';
 import { formatDate, formatRelativeTime, formatEuro, STAGE_ORDER, getStagePillClass, calculateLeadScore } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
@@ -72,6 +73,9 @@ export default function LeadDetailClient({ lead: initialLead, notes: initialNote
       }
       if (updates.stage === 'Closed Won') {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.5 }, colors: ['#1B3A6B', '#059669', '#F59E0B'] });
+        // Auto-create the onboarding record for the new client
+        const res = await ensureOnboardingForLead(supabase, { ...prev, ...updates });
+        if (res.onboarding && !res.existed) toast.success('Onboarding created for this client');
       }
     }
   };

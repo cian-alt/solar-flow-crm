@@ -71,7 +71,13 @@ export type NotificationType =
   | "leave_approved"
   | "leave_rejected"
   | "commission_paid"
-  | "review_shared";
+  | "review_shared"
+  | "onboarding_created"
+  | "onboarding_step_complete"
+  | "training_scheduled"
+  | "training_booked"
+  | "onboarding_overdue"
+  | "onboarding_go_live";
 
 export type TaskPriority = "low" | "medium" | "high";
 
@@ -361,6 +367,118 @@ export interface PerformanceReview {
   status: ReviewStatus;
   created_at: string;
   reviewer?: Pick<Profile, "id" | "full_name" | "avatar_initials">;
+}
+
+// ── Customer Onboarding module ────────────────────────────────────────────────
+
+export type OnboardingPackage = "Basic" | "Pro" | "Premium";
+export type OnboardingStatus = "not_started" | "in_progress" | "completed" | "on_hold";
+export type OnboardingStepType =
+  | "sla_signing"
+  | "payment"
+  | "portal_activation"
+  | "department_emails"
+  | "training_schedule"
+  | "training_session"
+  | "handover"
+  | "go_live"
+  | "account_setup"
+  | "am_intro"
+  | "custom";
+export type OnboardingStepStatus = "pending" | "in_progress" | "completed" | "skipped";
+export type TrainingSessionType = "online" | "in_person";
+export type TrainingSessionStatus = "scheduled" | "completed" | "cancelled" | "rescheduled";
+export type OnboardingDocumentType =
+  | "sla"
+  | "welcome_pack"
+  | "training_guide"
+  | "setup_guide"
+  | "department_guide"
+  | "other";
+
+export interface Onboarding {
+  id: string;
+  lead_id: string | null;
+  deal_id: string | null;
+  client_company_name: string;
+  client_contact_name: string | null;
+  client_contact_email: string | null;
+  client_contact_phone: string | null;
+  onboarding_package: OnboardingPackage;
+  status: OnboardingStatus;
+  assigned_am: string | null;
+  portal_token: string;
+  portal_last_viewed: string | null;
+  departments: string[];
+  sla_signed: boolean;
+  sla_signed_at: string | null;
+  subscription_activated: boolean;
+  subscription_activated_at: string | null;
+  payment_link_sent: boolean;
+  payment_link_sent_at: string | null;
+  go_live_date: string | null;
+  internal_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined / computed
+  am_profile?: Profile;
+  steps?: OnboardingStep[];
+  step_count?: number;
+  completed_count?: number;
+}
+
+export interface OnboardingStep {
+  id: string;
+  onboarding_id: string;
+  step_type: OnboardingStepType;
+  title: string;
+  description: string | null;
+  department: string | null;
+  status: OnboardingStepStatus;
+  assigned_to: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+  assignee?: Profile;
+  completer?: Profile;
+}
+
+export interface TrainingSession {
+  id: string;
+  onboarding_id: string;
+  onboarding_step_id: string | null;
+  department: string | null;
+  session_type: TrainingSessionType;
+  session_number: number | null;
+  title: string;
+  scheduled_date: string | null;
+  duration_minutes: number;
+  location_or_link: string | null;
+  trainer: string | null;
+  attendees: string | null;
+  status: TrainingSessionStatus;
+  client_can_book: boolean;
+  available_slots: string[];
+  notes: string | null;
+  recording_url: string | null;
+  created_at: string;
+  updated_at: string;
+  trainer_profile?: Profile;
+}
+
+export interface OnboardingDocument {
+  id: string;
+  onboarding_id: string;
+  document_type: OnboardingDocumentType;
+  title: string;
+  file_url: string;
+  uploaded_by: string | null;
+  visible_to_client: boolean;
+  created_at: string;
+  uploader?: Profile;
 }
 
 // Dashboard types
