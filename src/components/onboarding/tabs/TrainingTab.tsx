@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from "react";
-import { Plus, Video, MapPin, Clock, CalendarClock } from "lucide-react";
+import { Plus, Clock, CalendarClock, CalendarPlus } from "lucide-react";
 import type { Onboarding, TrainingSession, Profile } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
-import { TRAINING_STATUS_META, departmentColor } from "../helpers";
-import { formatDateTime } from "@/lib/utils";
+import { TRAINING_STATUS_META, departmentColor, trainingTypeMeta } from "../helpers";
+import { cn, formatDateTime } from "@/lib/utils";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import ScheduleSessionModal from "../ScheduleSessionModal";
@@ -20,16 +20,23 @@ interface Props {
 
 export default function TrainingTab({ onboarding, sessions, profiles, onSessionsChange }: Props) {
   const supabase = createClient();
-  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [editingSession, setEditingSession] = useState<TrainingSession | null>(null);
 
   const patch = async (id: string, updates: Partial<TrainingSession>) => {
     onSessionsChange(sessions.map((s) => (s.id === id ? { ...s, ...updates } : s)));
     await supabase.from("training_sessions").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
   };
 
+  const upsert = (saved: TrainingSession) => {
+    onSessionsChange(sessions.some((s) => s.id === saved.id) ? sessions.map((s) => (s.id === saved.id ? saved : s)) : [...sessions, saved]);
+  };
+
+  const openSchedule = (session: TrainingSession | null) => { setEditingSession(session); setScheduleOpen(true); };
+
   // group by department
   const groups = sessions.reduce<Record<string, TrainingSession[]>>((acc, s) => {
-    const key = s.department ?? "General";
+    const key = s.department ?? "All Teams";
     (acc[key] ??= []).push(s);
     return acc;
   }, {});
@@ -37,13 +44,13 @@ export default function TrainingTab({ onboarding, sessions, profiles, onSessions
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button onClick={() => setShowSchedule(true)} className="flex items-center gap-1.5 px-4 py-2 bg-[#1B3A6B] text-white text-sm font-semibold rounded-xl hover:bg-[#152E55] transition-colors">
+        <button onClick={() => openSchedule(null)} className="flex items-center gap-1.5 px-4 py-2 bg-[#1B3A6B] text-white text-sm font-semibold rounded-xl hover:bg-[#152E55] transition-colors">
           <Plus size={16} /> Schedule Session
         </button>
       </div>
 
       {sessions.length === 0 ? (
-        <EmptyState icon={CalendarClock} title="No training sessions yet" description="Schedule the first session for this client." action={{ label: "Schedule Session", onClick: () => setShowSchedule(true) }} />
+        <EmptyState icon={CalendarClock} title="No training sessions yet" description="Schedule the first session for this client." action={{ label: "Schedule Session", onClick: () => openSchedule(null) }} />
       ) : (
         Object.entries(groups).map(([dept, list]) => (
           <div key={dept}>
@@ -55,19 +62,27 @@ export default function TrainingTab({ onboarding, sessions, profiles, onSessions
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
               {list.map((s) => {
                 const statusMeta = TRAINING_STATUS_META[s.status];
+                const typeMeta = trainingTypeMeta(s.session_type);
+                const TypeIcon = typeMeta.icon;
                 const trainerName = s.trainer_profile?.full_name ?? profiles.find((p) => p.id === s.trainer)?.full_name;
                 return (
-                  <div key={s.id} className="glass-sm p-4 space-y-2.5" style={{ borderLeft: `3px solid ${departmentColor(dept)}` }}>
+                  <div
+                    key={s.id}
+                    className={cn("glass-sm p-4 space-y-2.5", typeMeta.gold && "ring-1 ring-amber-300")}
+                    style={{ borderLeft: `3px solid ${typeMeta.gold ? "#D4A017" : departmentColor(dept)}` }}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#0F172A] truncate">{s.title}{s.session_number ? ` — Session ${s.session_number}` : ""}</p>
+                        <p className="text-sm font-semibold text-[#0F172A] truncate">{s.title}</p>
                         <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500">
-                          {s.session_type === "in_person" ? <MapPin size={12} /> : <Video size={12} />}
-                          <span className="capitalize">{s.session_type.replace("_", " ")}</span>
+                          <TypeIcon size={12} className={typeMeta.gold ? "text-amber-500" : undefined} />
+                          <span>{typeMeta.label}</span>
                           <span className="inline-flex items-center gap-0.5"><Clock size={11} /> {s.duration_minutes}m</span>
                         </div>
                       </div>
-                      {s.client_can_book ? (
+                      {typeMeta.gold ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase tracking-wide shrink-0">★ On-Site</span>
+                      ) : s.client_can_book ? (
                         <Badge variant="warning">Pending Client Booking</Badge>
                       ) : (
                         <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
@@ -80,10 +95,13 @@ export default function TrainingTab({ onboarding, sessions, profiles, onSessions
                     </div>
 
                     {s.location_or_link && (
-                      <a href={s.session_type === "in_person" ? undefined : s.location_or_link} target="_blank" rel="noreferrer" className="text-xs text-[#1B3A6B] truncate block hover:underline">{s.location_or_link}</a>
+                      <a href={s.session_type === "online" ? s.location_or_link : undefined} target="_blank" rel="noreferrer" className="text-xs text-[#1B3A6B] truncate block hover:underline">{s.location_or_link}</a>
                     )}
 
                     <div className="flex items-center gap-2 flex-wrap pt-1">
+                      <button onClick={() => openSchedule(s)} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#1B3A6B] text-white text-[11px] font-semibold rounded-lg hover:bg-[#152E55]">
+                        <CalendarPlus size={12} /> {s.scheduled_date || s.client_can_book ? "Reschedule" : "Schedule"}
+                      </button>
                       {s.status !== "completed" && (
                         <button onClick={() => patch(s.id, { status: "completed" })} className="px-2.5 py-1 bg-emerald-600 text-white text-[11px] font-semibold rounded-lg hover:bg-emerald-700">Mark Completed</button>
                       )}
@@ -108,11 +126,12 @@ export default function TrainingTab({ onboarding, sessions, profiles, onSessions
       )}
 
       <ScheduleSessionModal
-        isOpen={showSchedule}
-        onClose={() => setShowSchedule(false)}
+        isOpen={scheduleOpen}
+        onClose={() => { setScheduleOpen(false); setEditingSession(null); }}
         onboarding={onboarding}
         profiles={profiles}
-        onScheduled={(s) => onSessionsChange([...sessions, s])}
+        session={editingSession}
+        onSaved={upsert}
       />
     </div>
   );

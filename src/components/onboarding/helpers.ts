@@ -11,12 +11,16 @@ import {
   Settings,
   UserCheck,
   CircleDot,
+  Video,
+  Building2,
+  Star,
 } from "lucide-react";
 import type {
   OnboardingStatus,
   OnboardingStepStatus,
   OnboardingStepType,
   TrainingSessionStatus,
+  TrainingSessionType,
 } from "@/types/database";
 
 export const STEP_TYPE_ICON: Record<OnboardingStepType, LucideIcon> = {
@@ -59,9 +63,21 @@ export const DEPARTMENT_COLOR: Record<string, string> = {
   Admin: "#2563EB",
   Sales: "#7C3AED",
   Operations: "#0891B2",
-  Wiring: "#D97706",
   Installation: "#059669",
+  Wiring: "#D97706", // legacy onboardings created before the Installation rename
 };
+
+// Training session type → icon + styling.
+// online → video, in_person → building, full_day_onsite → gold star
+export const TRAINING_TYPE_META: Record<TrainingSessionType, { icon: LucideIcon; label: string; gold: boolean }> = {
+  online: { icon: Video, label: "Online", gold: false },
+  in_person: { icon: Building2, label: "In Person", gold: false },
+  full_day_onsite: { icon: Star, label: "Full Day On-Site", gold: true },
+};
+
+export function trainingTypeMeta(t: TrainingSessionType) {
+  return TRAINING_TYPE_META[t] ?? TRAINING_TYPE_META.online;
+}
 
 export function departmentColor(dept: string | null | undefined): string {
   if (!dept) return "#64748B";

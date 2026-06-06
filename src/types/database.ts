@@ -386,7 +386,7 @@ export type OnboardingStepType =
   | "am_intro"
   | "custom";
 export type OnboardingStepStatus = "pending" | "in_progress" | "completed" | "skipped";
-export type TrainingSessionType = "online" | "in_person";
+export type TrainingSessionType = "online" | "in_person" | "full_day_onsite";
 export type TrainingSessionStatus = "scheduled" | "completed" | "cancelled" | "rescheduled";
 export type OnboardingDocumentType =
   | "sla"

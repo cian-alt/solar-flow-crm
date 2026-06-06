@@ -146,6 +146,7 @@ function SortableStep({
   const done = step.status === "completed";
   const skipped = step.status === "skipped";
   const overdue = isStepOverdue(step);
+  const daysOverdue = overdue && step.due_date ? Math.floor((Date.now() - new Date(step.due_date).getTime()) / 86400000) : 0;
   const assignee = profiles.find((p) => p.id === step.assigned_to);
 
   return (
@@ -174,6 +175,7 @@ function SortableStep({
           </button>
           <span className={cn("text-[11px] shrink-0 flex items-center gap-1", overdue ? "text-red-600 font-semibold" : "text-slate-400")}>
             {overdue && <AlertCircle size={11} />}{formatDate(step.due_date)}
+            {overdue && <span>· {daysOverdue}d overdue</span>}
           </span>
           {assignee && <Avatar name={assignee.full_name} size="sm" />}
           <ChevronDown size={15} className={cn("text-slate-400 transition-transform shrink-0", expanded && "rotate-180")} />

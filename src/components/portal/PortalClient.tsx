@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Circle, Mail, Phone, Download, FileSignature, Video, MapPin, PlayCircle, CalendarClock } from "lucide-react";
+import { ArrowRight, Circle, Mail, Phone, Download, FileSignature, PlayCircle, CalendarClock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Onboarding, OnboardingStep, TrainingSession, OnboardingDocument } from "@/types/database";
 import { onboardingProgress } from "@/lib/onboarding";
-import { STEP_TYPE_ICON, progressColor } from "@/components/onboarding/helpers";
+import { STEP_TYPE_ICON, progressColor, trainingTypeMeta } from "@/components/onboarding/helpers";
 import { cn, formatDateTime, formatRelativeTime } from "@/lib/utils";
 import SolarFlowLogo from "@/components/logo/SolarFlowLogo";
 import Spinner from "@/components/ui/Spinner";
@@ -147,7 +147,7 @@ export default function PortalClient({ token }: { token: string }) {
             {upcomingTraining.map((t) => (
               <div key={t.id} className="glass-sm p-4">
                 <div className="flex items-center gap-2 mb-1">
-                  {t.session_type === "in_person" ? <MapPin size={14} className="text-[#1B3A6B]" /> : <Video size={14} className="text-[#1B3A6B]" />}
+                  {(() => { const TI = trainingTypeMeta(t.session_type).icon; const gold = trainingTypeMeta(t.session_type).gold; return <TI size={14} className={gold ? "text-amber-500" : "text-[#1B3A6B]"} />; })()}
                   <p className="text-sm font-semibold text-[#0F172A]">{t.title}</p>
                 </div>
                 {t.client_can_book && t.available_slots?.length > 0 ? (

@@ -625,7 +625,7 @@ create table if not exists public.onboardings (
   assigned_am uuid references public.profiles(id),
   portal_token uuid not null unique default uuid_generate_v4(),
   portal_last_viewed timestamptz,
-  departments jsonb not null default '["Admin","Sales","Operations","Wiring"]'::jsonb,
+  departments jsonb not null default '["Admin","Sales","Operations","Installation"]'::jsonb,
   sla_signed boolean not null default false,
   sla_signed_at timestamptz,
   subscription_activated boolean not null default false,
@@ -680,7 +680,7 @@ create table if not exists public.training_sessions (
   onboarding_id uuid not null references public.onboardings(id) on delete cascade,
   onboarding_step_id uuid references public.onboarding_steps(id) on delete set null,
   department text,
-  session_type text not null default 'online' check (session_type in ('online','in_person')),
+  session_type text not null default 'online' check (session_type in ('online','in_person','full_day_onsite')),
   session_number integer,
   title text not null,
   scheduled_date timestamptz,
@@ -816,3 +816,15 @@ grant execute on function public.portal_get_onboarding(uuid) to anon, authentica
 grant execute on function public.portal_log_view(uuid) to anon, authenticated;
 grant execute on function public.portal_book_slot(uuid, uuid, timestamptz) to anon, authenticated;
 grant execute on function public.portal_sign_sla(uuid) to anon, authenticated;
+
+-- =====================
+-- ONBOARDING PACKAGE CORRECTIONS (run on existing databases)
+-- =====================
+-- Allow the full-day on-site training session type.
+alter table public.training_sessions drop constraint if exists training_sessions_session_type_check;
+alter table public.training_sessions add constraint training_sessions_session_type_check
+  check (session_type in ('online','in_person','full_day_onsite'));
+
+-- Rename the default department set (Wiring → Installation) for new onboardings.
+alter table public.onboardings
+  alter column departments set default '["Admin","Sales","Operations","Installation"]'::jsonb;
