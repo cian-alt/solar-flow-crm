@@ -18,8 +18,8 @@ import { KanbanColumn } from './KanbanColumn';
 import { LeadCard } from './LeadCard';
 import { STAGE_ORDER } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { ensureOnboardingForLead } from '@/lib/onboarding';
 import toast from 'react-hot-toast';
+import CloseDealModal from '@/components/lead-detail/CloseDealModal';
 
 interface KanbanBoardProps {
   leads: Lead[];
@@ -28,6 +28,7 @@ interface KanbanBoardProps {
 
 export default function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [dealLead, setDealLead] = useState<Lead | null>(null);
   const supabase = createClient();
 
   const sensors = useSensors(
@@ -108,18 +109,17 @@ export default function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) 
         });
       }
 
-      // Trigger confetti for Closed Won (handled in lead detail, but toast here)
+      // Closed Won → open the Close Deal flow (confetti + onboarding/SLA on submit)
       if (newStage === 'Closed Won') {
-        toast.success(`🎉 ${lead.company_name} — Closed Won!`);
-        const res = await ensureOnboardingForLead(supabase, { ...lead, stage: newStage });
-        if (res.onboarding && !res.existed) toast.success('Onboarding created for this client');
+        setDealLead({ ...lead, stage: newStage });
       }
     }
 
-    toast.success(`Moved to ${newStage}`);
+    if (newStage !== 'Closed Won') toast.success(`Moved to ${newStage}`);
   };
 
   return (
+    <>
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
@@ -144,5 +144,15 @@ export default function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) 
         ) : null}
       </DragOverlay>
     </DndContext>
+
+    {dealLead && (
+      <CloseDealModal
+        lead={dealLead}
+        isOpen={!!dealLead}
+        onClose={() => setDealLead(null)}
+        onCompleted={() => setDealLead(null)}
+      />
+    )}
+    </>
   );
 }

@@ -246,11 +246,33 @@ export interface Notification {
 
 export type PaymentType = "monthly" | "upfront";
 
+export type SlaStatus = "draft" | "sent" | "signed";
+
 export interface Contract {
   id: string;
   lead_id: string;
   onboarding_fee: number | null;
   payment_type: PaymentType;
+  // ── Close-deal fields ──
+  subscription_package: RecommendedPackage | null;
+  monthly_amount: number | null;
+  contract_duration_months: number | null;
+  start_date: string | null;
+  subscription_discount: boolean | null;
+  subscription_original_amount: number | null;
+  subscription_discount_reason: string | null;
+  onboarding_package: OnboardingPackage | null;
+  onboarding_discount: boolean | null;
+  onboarding_original_fee: number | null;
+  onboarding_discount_reason: string | null;
+  official_company_name: string | null;
+  company_address: string | null;
+  eircode: string | null;
+  vat_number: string | null;
+  sla_status: SlaStatus | null;
+  sla_document_url: string | null;
+  onboarding_id: string | null;
+  is_draft: boolean | null;
   created_at: string;
   updated_at: string;
   // Embedded

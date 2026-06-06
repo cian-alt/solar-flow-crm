@@ -828,3 +828,39 @@ alter table public.training_sessions add constraint training_sessions_session_ty
 -- Rename the default department set (Wiring → Installation) for new onboardings.
 alter table public.onboardings
   alter column departments set default '["Admin","Sales","Operations","Installation"]'::jsonb;
+
+-- =====================
+-- CLOSE DEAL FLOW — contract deal/SLA fields (run on existing databases)
+-- =====================
+alter table public.contracts
+  add column if not exists subscription_package text,
+  add column if not exists monthly_amount numeric(12,2),
+  add column if not exists contract_duration_months integer,
+  add column if not exists start_date date,
+  add column if not exists subscription_discount boolean not null default false,
+  add column if not exists subscription_original_amount numeric(12,2),
+  add column if not exists subscription_discount_reason text,
+  add column if not exists onboarding_package text,
+  add column if not exists onboarding_discount boolean not null default false,
+  add column if not exists onboarding_original_fee numeric(12,2),
+  add column if not exists onboarding_discount_reason text,
+  add column if not exists official_company_name text,
+  add column if not exists company_address text,
+  add column if not exists eircode text,
+  add column if not exists vat_number text,
+  add column if not exists sla_status text not null default 'draft',
+  add column if not exists sla_document_url text,
+  add column if not exists onboarding_id uuid references public.onboardings(id) on delete set null,
+  add column if not exists is_draft boolean not null default false;
+
+alter table public.contracts drop constraint if exists contracts_subscription_package_check;
+alter table public.contracts add constraint contracts_subscription_package_check
+  check (subscription_package is null or subscription_package in ('Starter','Professional','Enterprise'));
+
+alter table public.contracts drop constraint if exists contracts_onboarding_package_check;
+alter table public.contracts add constraint contracts_onboarding_package_check
+  check (onboarding_package is null or onboarding_package in ('Basic','Pro','Premium'));
+
+alter table public.contracts drop constraint if exists contracts_sla_status_check;
+alter table public.contracts add constraint contracts_sla_status_check
+  check (sla_status in ('draft','sent','signed'));
