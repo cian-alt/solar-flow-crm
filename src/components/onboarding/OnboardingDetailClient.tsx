@@ -10,6 +10,10 @@ import { onboardingProgress, PACKAGE_META } from "@/lib/onboarding";
 import { ONBOARDING_STATUS_META, progressColor } from "./helpers";
 import { cn, formatDate } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
+import Modal from "@/components/ui/Modal";
+import Input from "@/components/ui/Input";
+import Textarea from "@/components/ui/Textarea";
+import Button from "@/components/ui/Button";
 import StepsTab from "./tabs/StepsTab";
 import TrainingTab from "./tabs/TrainingTab";
 import OnbDocumentsTab from "./tabs/OnbDocumentsTab";
@@ -34,6 +38,10 @@ export default function OnboardingDetailClient({ onboarding: initial, initialSte
   const [documents, setDocuments] = useState(initialDocuments);
   const [tab, setTab] = useState<Tab>("steps");
   const [origin, setOrigin] = useState("");
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendTo, setSendTo] = useState("");
+  const [sendSubject, setSendSubject] = useState("");
+  const [sendBody, setSendBody] = useState("");
 
   useEffect(() => { setOrigin(window.location.origin); }, []);
 
@@ -51,16 +59,25 @@ export default function OnboardingDetailClient({ onboarding: initial, initialSte
   const copyLink = async () => {
     if (!portalUrl) return;
     await navigator.clipboard.writeText(portalUrl);
-    toast.success("Portal link copied");
+    toast.success("Copied!");
+  };
+
+  const openSend = () => {
+    setSendTo(onboarding.client_contact_email ?? "");
+    setSendSubject("Your Solar Flow onboarding portal");
+    setSendBody(
+      `Hi ${onboarding.client_contact_name ?? "there"},\n\n` +
+      `Welcome to Solar Flow! We're delighted to have ${onboarding.client_company_name} on board.\n\n` +
+      `You can track your onboarding progress, view training sessions and access your documents any time using your personal portal:\n${portalUrl}\n\n` +
+      `If you have any questions, just reply to this email.\n\nKind regards,\nYour Solar Flow team`,
+    );
+    setSendOpen(true);
   };
 
   const sendLink = () => {
-    if (!portalUrl) return;
-    const to = onboarding.client_contact_email ?? "";
-    const subject = encodeURIComponent(`Your Solar Flow onboarding portal`);
-    const body = encodeURIComponent(`Hi ${onboarding.client_contact_name ?? "there"},\n\nWelcome to Solar Flow! You can track your onboarding progress here:\n${portalUrl}\n\nYour Solar Flow team`);
-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
-    updateOnboarding({});
+    window.location.href = `mailto:${encodeURIComponent(sendTo)}?subject=${encodeURIComponent(sendSubject)}&body=${encodeURIComponent(sendBody)}`;
+    setSendOpen(false);
+    toast.success("Opening your email client…");
   };
 
   const TABS: { id: Tab; label: string; icon: React.ElementType; count?: number }[] = [
@@ -110,8 +127,8 @@ export default function OnboardingDetailClient({ onboarding: initial, initialSte
             <button onClick={copyLink} className="flex items-center gap-1.5 px-3 py-2 bg-white/60 border border-white/80 text-slate-600 text-sm font-medium rounded-xl hover:bg-white/80 transition-colors min-h-[40px]">
               <Copy size={15} /> Copy Portal Link
             </button>
-            <button onClick={sendLink} className="flex items-center gap-1.5 px-3 py-2 bg-[#1B3A6B] text-white text-sm font-semibold rounded-xl hover:bg-[#152E55] transition-colors min-h-[40px]">
-              <Send size={15} /> Send to Client
+            <button onClick={openSend} className="flex items-center gap-1.5 px-3 py-2 bg-[#1B3A6B] text-white text-sm font-semibold rounded-xl hover:bg-[#152E55] transition-colors min-h-[40px]">
+              <Send size={15} /> Send Portal Link
             </button>
           </div>
         </div>
@@ -177,6 +194,20 @@ export default function OnboardingDetailClient({ onboarding: initial, initialSte
           )}
         </motion.div>
       </AnimatePresence>
+
+      {/* Send Portal Link modal */}
+      <Modal isOpen={sendOpen} onClose={() => setSendOpen(false)} title="Send portal link to client" size="md">
+        <div className="space-y-4">
+          <Input label="To" type="email" value={sendTo} onChange={(e) => setSendTo(e.target.value)} placeholder="client@company.ie" />
+          <Input label="Subject" value={sendSubject} onChange={(e) => setSendSubject(e.target.value)} />
+          <Textarea label="Message" rows={9} value={sendBody} onChange={(e) => setSendBody(e.target.value)} />
+          <p className="text-xs text-slate-400">Opens your email client with this message pre-filled (the portal link is included in the body).</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setSendOpen(false)}>Cancel</Button>
+            <Button onClick={sendLink} leftIcon={<Send size={15} />} disabled={!sendTo}>Send</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

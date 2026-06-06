@@ -13,7 +13,7 @@ import type {
 // Package metadata (corrected onboarding packages)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const ONBOARDING_DEPARTMENTS = ["Admin", "Sales", "Operations", "Wiring"] as const;
+export const ONBOARDING_DEPARTMENTS = ["Admin", "Sales", "Operations", "Installation"] as const;
 
 export interface PackageMeta {
   label: string;
@@ -27,19 +27,19 @@ export const PACKAGE_META: Record<OnboardingPackage, PackageMeta> = {
     label: "Basic",
     fee: 0,
     badgeClass: "pkg-basic",
-    summary: "1 × 45 min setup call. Client self-trains. Dedicated AM.",
+    summary: "45 min online setup call. Client self-trains afterwards. Dedicated AM.",
   },
   Pro: {
     label: "Pro",
     fee: 1500,
     badgeClass: "pkg-pro",
-    summary: "1 × 45 min setup + 8 online training sessions (2 per dept). Dedicated AM.",
+    summary: "Setup call + 8 online training sessions (2 per department). Dedicated AM.",
   },
   Premium: {
     label: "Premium",
     fee: 2500,
     badgeClass: "pkg-premium",
-    summary: "Everything in Pro + 1 full-day in-person training visit per department. Dedicated AM.",
+    summary: "Everything in Pro + a full-day on-site training visit. Dedicated AM.",
   },
 };
 
@@ -57,69 +57,78 @@ export interface StepTemplate {
   training?: { session_type: TrainingSessionType; session_number: number | null };
 }
 
+const W = (weeks: number) => weeks * 7;
+
 const COMMON_STEPS: StepTemplate[] = [
   { step_type: "sla_signing", title: "SLA Signing", description: "Client to sign Service Level Agreement", department: null, dueOffsetDays: 1 },
-  { step_type: "payment", title: "Payment & Subscription Setup", description: "Send payment link, activate subscription", department: null, dueOffsetDays: 2 },
-  { step_type: "department_emails", title: "Department Emails Collection", description: "Collect Admin, Sales, Operations, Wiring team email addresses", department: null, dueOffsetDays: 3 },
+  { step_type: "payment", title: "Payment and Subscription Setup", description: "Send payment link, activate subscription", department: null, dueOffsetDays: 2 },
+  { step_type: "department_emails", title: "Department Emails Collection", description: "Collect Admin, Sales, Operations, Installation team email addresses", department: null, dueOffsetDays: 3 },
 ];
+
+// Account setup is a call, NOT a training session — it never generates a training_sessions row.
+const ACCOUNT_SETUP: StepTemplate = {
+  step_type: "account_setup",
+  title: "Account Setup Call",
+  description: "45 minute online onboarding & setup session",
+  department: null,
+  dueOffsetDays: 5,
+};
 
 function basicSteps(): StepTemplate[] {
   return [
     ...COMMON_STEPS,
-    { step_type: "account_setup", title: "Account Setup", description: "1 hour onboarding & setup session", department: null, dueOffsetDays: 5, training: { session_type: "online", session_number: null } },
+    ACCOUNT_SETUP,
     { step_type: "am_intro", title: "Account Manager Introduction", description: "Introduce dedicated AM to client", department: null, dueOffsetDays: 5 },
     { step_type: "go_live", title: "Go Live", description: "Client is live on Solar Flow", department: null, dueOffsetDays: 7 },
   ];
 }
 
-function proSteps(): StepTemplate[] {
+// Shared by Pro and Premium: common steps + setup call + training schedule + 8 online sessions
+// (2 per department). Department i runs sessions in weeks (2+i) and (3+i).
+function trainingCore(): StepTemplate[] {
   const steps: StepTemplate[] = [
     ...COMMON_STEPS,
-    { step_type: "account_setup", title: "Account Setup", description: "1 hour onboarding & setup session", department: null, dueOffsetDays: 5, training: { session_type: "online", session_number: null } },
-    { step_type: "training_schedule", title: "Training Schedule Setup", description: "Confirm training schedule with client for each department", department: null, dueOffsetDays: 7 },
+    ACCOUNT_SETUP,
+    { step_type: "training_schedule", title: "Training Schedule Setup", description: "Confirm training schedule with client for each department", department: null, dueOffsetDays: W(1) },
   ];
-  // 3 online sessions per department; dept i sessions at weeks [2+i, 3+i, 4+i]
   ONBOARDING_DEPARTMENTS.forEach((dept, i) => {
-    for (let s = 1; s <= 3; s++) {
+    for (let s = 1; s <= 2; s++) {
       steps.push({
         step_type: "training_session",
-        title: `${dept} Team Training — Session ${s} of 3`,
-        description: `Online training session ${s} of 3 for the ${dept} team`,
+        title: `${dept} Team Training Session ${s} of 2`,
+        description: `45 minute online training session ${s} of 2 for the ${dept} team`,
         department: dept,
-        dueOffsetDays: (1 + i + s) * 7, // week (2+i) for s=1 → (1+i+1)*7
+        dueOffsetDays: W(2 + i + (s - 1)),
         training: { session_type: "online", session_number: s },
       });
     }
   });
-  steps.push(
-    { step_type: "handover", title: "Handover & Ongoing Support", description: "Assign dedicated AM, confirm support process", department: null, dueOffsetDays: 7 * 7 },
-    { step_type: "go_live", title: "Go Live", description: "Client fully live on Solar Flow", department: null, dueOffsetDays: 8 * 7 },
-  );
   return steps;
 }
 
-function premiumSteps(): StepTemplate[] {
-  const steps: StepTemplate[] = [
-    ...COMMON_STEPS,
-    { step_type: "account_setup", title: "Account Setup", description: "1 hour onboarding & setup session", department: null, dueOffsetDays: 5, training: { session_type: "in_person", session_number: null } },
-    { step_type: "training_schedule", title: "Training Schedule Setup", description: "Confirm training schedule with client for each department", department: null, dueOffsetDays: 7 },
+function proSteps(): StepTemplate[] {
+  return [
+    ...trainingCore(),
+    { step_type: "handover", title: "Handover and Ongoing Support", description: "Assign dedicated AM, confirm support process", department: null, dueOffsetDays: W(6) },
+    { step_type: "go_live", title: "Go Live", description: "Client fully live on Solar Flow", department: null, dueOffsetDays: W(7) },
   ];
-  // one full in-person day per department; dept i at week (2+i)
-  ONBOARDING_DEPARTMENTS.forEach((dept, i) => {
-    steps.push({
+}
+
+function premiumSteps(): StepTemplate[] {
+  // Everything in Pro (steps 1–15) PLUS the on-site visit, a final handover and go-live.
+  return [
+    ...proSteps(),
+    {
       step_type: "training_session",
-      title: `${dept} Team In-Person Training — Full Day`,
-      description: `Full day in-person training visit for the ${dept} team`,
-      department: dept,
-      dueOffsetDays: (2 + i) * 7,
-      training: { session_type: "in_person", session_number: 1 },
-    });
-  });
-  steps.push(
-    { step_type: "handover", title: "Handover & Ongoing Support", description: "Assign dedicated AM, confirm support process", department: null, dueOffsetDays: 5 * 7 },
-    { step_type: "go_live", title: "Go Live", description: "Client fully live on Solar Flow", department: null, dueOffsetDays: 6 * 7 },
-  );
-  return steps;
+      title: "Full Day On-Site Training Visit",
+      description: "Solar Flow team travels to the client premises for a full day of in-person training",
+      department: null,
+      dueOffsetDays: W(8),
+      training: { session_type: "full_day_onsite", session_number: null },
+    },
+    { step_type: "handover", title: "Handover and Ongoing Support", description: "Assign dedicated AM, confirm support process", department: null, dueOffsetDays: W(8) },
+    { step_type: "go_live", title: "Go Live", description: "Client fully live on Solar Flow", department: null, dueOffsetDays: W(9) },
+  ];
 }
 
 export function stepTemplatesFor(pkg: OnboardingPackage): StepTemplate[] {
@@ -200,7 +209,9 @@ export async function createOnboarding(
   }
 
   const templates = stepTemplatesFor(params.pkg);
-  const goLive = templates.find((t) => t.step_type === "go_live");
+  // Use the LAST go-live step (Premium has an interim one at wk7 and the real one at wk9).
+  const goLives = templates.filter((t) => t.step_type === "go_live");
+  const goLive = goLives[goLives.length - 1];
   const goLiveDate = goLive ? format(addDays(start, goLive.dueOffsetDays), "yyyy-MM-dd") : null;
 
   const { data: onboarding, error: onbErr } = await supabase
@@ -250,7 +261,7 @@ export async function createOnboarding(
       session_type: t.training!.session_type,
       session_number: t.training!.session_number,
       title: t.title,
-      duration_minutes: t.training!.session_type === "in_person" ? 480 : 45,
+      duration_minutes: t.training!.session_type === "online" ? 45 : 480,
       status: "scheduled",
     }));
   if (trainingRows.length > 0) {
