@@ -9,12 +9,13 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { motion } from "framer-motion";
-import { GripVertical, ChevronDown, Check, Plus, Upload, AlertCircle } from "lucide-react";
-import type { Onboarding, OnboardingStep, Profile } from "@/types/database";
+import { GripVertical, ChevronDown, Check, Plus, Upload, AlertCircle, Video, CalendarPlus, PlayCircle } from "lucide-react";
+import type { Onboarding, OnboardingStep, Profile, TrainingSession } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
+import { uploadDocument } from "@/lib/storage";
 import { isStepOverdue, notify } from "@/lib/onboarding";
 import { STEP_TYPE_ICON } from "../helpers";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import Avatar from "@/components/ui/Avatar";
 import toast from "react-hot-toast";
 import confetti from "canvas-confetti";
@@ -23,12 +24,14 @@ interface Props {
   onboarding: Onboarding;
   steps: OnboardingStep[];
   profiles: Profile[];
+  trainingByStepId: Map<string, TrainingSession>;
+  onScheduleTraining: (s: TrainingSession) => void;
   onStepsChange: (s: OnboardingStep[]) => void;
   onOnboardingChange: (u: Partial<Onboarding>) => void;
   onDocAdded: (d: import("@/types/database").OnboardingDocument) => void;
 }
 
-export default function StepsTab({ onboarding, steps, profiles, onStepsChange, onOnboardingChange, onDocAdded }: Props) {
+export default function StepsTab({ onboarding, steps, profiles, trainingByStepId, onScheduleTraining, onStepsChange, onOnboardingChange, onDocAdded }: Props) {
   const supabase = createClient();
   const [expanded, setExpanded] = useState<string | null>(null);
   const sensors = useSensors(
@@ -89,11 +92,10 @@ export default function StepsTab({ onboarding, steps, profiles, onStepsChange, o
   const uploadDoc = async (step: OnboardingStep, file: File) => {
     const { data: { user } } = await supabase.auth.getUser();
     const path = `onboarding/${onboarding.id}/${Date.now()}-${file.name}`;
-    const { error: upErr } = await supabase.storage.from("documents").upload(path, file);
-    if (upErr) { toast.error("Upload failed"); return; }
-    const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path);
+    const up = await uploadDocument(supabase, file, path);
+    if (up.error || !up.url) { toast.error(up.error ?? "Upload failed"); return; }
     const { data, error } = await supabase.from("onboarding_documents").insert({
-      onboarding_id: onboarding.id, document_type: "other", title: file.name, file_url: publicUrl, uploaded_by: user?.id ?? null, visible_to_client: true,
+      onboarding_id: onboarding.id, document_type: "other", title: file.name, file_url: up.url, uploaded_by: user?.id ?? null, visible_to_client: true,
     }).select("*, uploader:profiles!uploaded_by(id,full_name,avatar_initials)").single();
     if (error || !data) { toast.error("Failed to save document"); return; }
     onDocAdded(data as import("@/types/database").OnboardingDocument);
@@ -113,6 +115,8 @@ export default function StepsTab({ onboarding, steps, profiles, onStepsChange, o
                 isLast={i === steps.length - 1}
                 expanded={expanded === step.id}
                 profiles={profiles}
+                session={trainingByStepId.get(step.id) ?? null}
+                onScheduleTraining={onScheduleTraining}
                 onToggle={() => setExpanded(expanded === step.id ? null : step.id)}
                 onComplete={() => completeStep(step)}
                 onReopen={() => reopenStep(step)}
@@ -134,9 +138,10 @@ export default function StepsTab({ onboarding, steps, profiles, onStepsChange, o
 }
 
 function SortableStep({
-  step, index, isLast, expanded, profiles, onToggle, onComplete, onReopen, onSkip, onAssign, onDue, onUpload,
+  step, index, isLast, expanded, profiles, session, onScheduleTraining, onToggle, onComplete, onReopen, onSkip, onAssign, onDue, onUpload,
 }: {
   step: OnboardingStep; index: number; isLast: boolean; expanded: boolean; profiles: Profile[];
+  session: TrainingSession | null; onScheduleTraining: (s: TrainingSession) => void;
   onToggle: () => void; onComplete: () => void; onReopen: () => void; onSkip: () => void;
   onAssign: (id: string) => void; onDue: (d: string) => void; onUpload: (f: File) => void;
 }) {
@@ -186,6 +191,30 @@ function SortableStep({
             {step.description && <p className="text-sm text-slate-600">{step.description}</p>}
             {done && step.completed_at && (
               <p className="text-xs text-emerald-600">✓ Completed {formatDate(step.completed_at)}{step.completer?.full_name ? ` by ${step.completer.full_name}` : ""}</p>
+            )}
+
+            {/* Training session details for training steps */}
+            {step.step_type === "training_session" && session && (
+              <div className="p-3 rounded-xl bg-[#1B3A6B]/5 border border-[#1B3A6B]/10 space-y-2">
+                {session.status === "completed" ? (
+                  <div className="flex items-center gap-2 text-xs text-emerald-600">
+                    <Check size={13} /> Completed{session.scheduled_date ? ` · ${formatDateTime(session.scheduled_date)}` : ""}
+                    {session.recording_url && <a href={session.recording_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#1B3A6B] hover:underline ml-1"><PlayCircle size={13} /> Recording</a>}
+                  </div>
+                ) : session.scheduled_date ? (
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-600">📅 {formatDateTime(session.scheduled_date)} · {session.duration_minutes}m{session.trainer_profile?.full_name ? ` · ${session.trainer_profile.full_name}` : ""}</p>
+                    {session.session_type === "online" && session.location_or_link && (
+                      <a href={session.location_or_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[#1B3A6B] hover:underline"><Video size={13} /> Join link</a>
+                    )}
+                    <button onClick={() => onScheduleTraining(session)} className="block text-xs text-slate-500 hover:text-[#1B3A6B]">Reschedule</button>
+                  </div>
+                ) : (
+                  <button onClick={() => onScheduleTraining(session)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1B3A6B] text-white text-xs font-semibold rounded-lg hover:bg-[#152E55]">
+                    <CalendarPlus size={13} /> Schedule Session
+                  </button>
+                )}
+              </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>

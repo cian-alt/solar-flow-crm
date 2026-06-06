@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Upload, Download, Trash2, FileText, Eye, EyeOff } from "lucide-react";
 import type { Onboarding, OnboardingDocument, OnboardingDocumentType } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
+import { uploadDocument } from "@/lib/storage";
 import { cn, formatDate } from "@/lib/utils";
 import Select from "@/components/ui/Select";
 import Toggle from "@/components/ui/Toggle";
@@ -36,11 +37,10 @@ export default function OnbDocumentsTab({ onboarding, documents, onDocumentsChan
     setUploading(true);
     const { data: { user } } = await supabase.auth.getUser();
     const path = `onboarding/${onboarding.id}/${Date.now()}-${file.name}`;
-    const { error: upErr } = await supabase.storage.from("documents").upload(path, file);
-    if (upErr) { toast.error("Upload failed"); setUploading(false); return; }
-    const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path);
+    const up = await uploadDocument(supabase, file, path);
+    if (up.error || !up.url) { toast.error(up.error ?? "Upload failed"); setUploading(false); return; }
     const { data, error } = await supabase.from("onboarding_documents").insert({
-      onboarding_id: onboarding.id, document_type: docType, title: file.name, file_url: publicUrl, uploaded_by: user?.id ?? null, visible_to_client: visible,
+      onboarding_id: onboarding.id, document_type: docType, title: file.name, file_url: up.url, uploaded_by: user?.id ?? null, visible_to_client: visible,
     }).select("*, uploader:profiles!uploaded_by(id,full_name,avatar_initials)").single();
     setUploading(false);
     if (error || !data) { toast.error(error?.message.includes("does not exist") ? "Run the onboarding SQL migration first" : "Failed to save"); return; }

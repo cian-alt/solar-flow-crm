@@ -153,6 +153,32 @@ export function isStepOverdue(step: { status: string; due_date: string | null })
   return step.due_date < format(new Date(), "yyyy-MM-dd");
 }
 
+/**
+ * Keep onboarding_steps in sync with their linked training_sessions:
+ * - session completed  → step completed (if not already)
+ * - session scheduled with a date → step in_progress (only if still pending)
+ * Guarded with filters so we never downgrade a manually-completed step.
+ */
+export async function syncStepsWithTraining(supabase: SupabaseClient, onboardingId: string): Promise<void> {
+  const { data: sessions } = await supabase
+    .from("training_sessions")
+    .select("onboarding_step_id, status, scheduled_date")
+    .eq("onboarding_id", onboardingId);
+  const now = new Date().toISOString();
+  for (const s of (sessions ?? []) as { onboarding_step_id: string | null; status: string; scheduled_date: string | null }[]) {
+    if (!s.onboarding_step_id) continue;
+    if (s.status === "completed") {
+      await supabase.from("onboarding_steps")
+        .update({ status: "completed", completed_at: now, updated_at: now })
+        .eq("id", s.onboarding_step_id).neq("status", "completed");
+    } else if (s.scheduled_date) {
+      await supabase.from("onboarding_steps")
+        .update({ status: "in_progress", updated_at: now })
+        .eq("id", s.onboarding_step_id).eq("status", "pending");
+    }
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Notifications helper
 // ─────────────────────────────────────────────────────────────────────────────

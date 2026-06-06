@@ -11,6 +11,7 @@ import type {
 import { createOnboarding, notify } from "./onboarding";
 import { monthsBetween } from "./contractRevenue";
 import { generateSlaPdf } from "./sla";
+import { uploadDocument } from "./storage";
 
 export interface DealPhase {
   monthly_price: number;
@@ -160,9 +161,9 @@ export async function closeDeal(supabase: SupabaseClient, input: CloseDealInput)
         totalContractValue: total,
       });
       const path = `sla/${onboarding.id}/${Date.now()}-SLA.pdf`;
-      const { error: upErr } = await supabase.storage.from("documents").upload(path, blob, { contentType: "application/pdf", upsert: true });
-      if (!upErr) {
-        slaUrl = supabase.storage.from("documents").getPublicUrl(path).data.publicUrl;
+      const up = await uploadDocument(supabase, blob, path, "application/pdf");
+      if (up.url) {
+        slaUrl = up.url;
         const { data: { user } } = await supabase.auth.getUser();
         await supabase.from("onboarding_documents").insert({
           onboarding_id: onboarding.id, document_type: "sla", title: "Service Level Agreement.pdf",
