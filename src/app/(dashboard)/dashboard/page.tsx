@@ -49,16 +49,22 @@ export default async function DashboardPage() {
 
   // Normalise contracts — treat as empty if the table doesn't exist yet or query fails
   const contracts: ContractForRevenue[] = (contractsRaw ?? []) as unknown as ContractForRevenue[];
+  // Leads that already have a contract — their revenue comes from the contract
+  // (actual agreed amounts), so we don't also count their deal_value.
+  const contractLeadIds = new Set(
+    ((contractsRaw ?? []) as Array<{ lead?: { id?: string } }>).map(c => c.lead?.id).filter(Boolean) as string[],
+  );
 
   // ── KPIs from leads ────────────────────────────────────────────────
   const closedWon = allLeads.filter(l => l.stage === "Closed Won");
-  const leadsRevenue = closedWon.reduce((s, l) => s + (l.deal_value ?? 0), 0);
+  const closedWonNoContract = closedWon.filter(l => !contractLeadIds.has(l.id));
+  const leadsRevenue = closedWonNoContract.reduce((s, l) => s + (l.deal_value ?? 0), 0);
   const totalRevenue = leadsRevenue + contractsTotalRevenue(contracts);
 
   // This month revenue
   const thisMonthStart = startOfMonth(new Date());
   const nextMonthStart = startOfMonth(subMonths(new Date(), -1));
-  const leadsThisMonth = closedWon
+  const leadsThisMonth = closedWonNoContract
     .filter(l => l.updated_at >= thisMonthStart.toISOString())
     .reduce((s, l) => s + (l.deal_value ?? 0), 0);
   const contractsThisMonth = contractRevenueForMonth(contracts, thisMonthStart, nextMonthStart);
@@ -72,7 +78,7 @@ export default async function DashboardPage() {
     const d = subMonths(new Date(), 5 - i);
     const mStart = startOfMonth(d);
     const mEnd = startOfMonth(subMonths(d, -1));
-    const leadsRev = closedWon
+    const leadsRev = closedWonNoContract
       .filter(l => l.updated_at >= mStart.toISOString() && l.updated_at < mEnd.toISOString())
       .reduce((s, l) => s + (l.deal_value ?? 0), 0);
     const contractRev = contractRevenueForMonth(contracts, mStart, mEnd);

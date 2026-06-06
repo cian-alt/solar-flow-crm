@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import type { Lead, Note, Activity, Call, Task, Document, Profile, LeadStage } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
-import { ensureOnboardingForLead } from '@/lib/onboarding';
 import { formatDate, formatRelativeTime, formatEuro, STAGE_ORDER, getStagePillClass, calculateLeadScore } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
@@ -19,6 +18,8 @@ import TasksTab from './tabs/TasksTab';
 import DocumentsTab from './tabs/DocumentsTab';
 import IntelligenceTab from './tabs/IntelligenceTab';
 import ContractRevenue from './ContractRevenue';
+import CloseDealModal from './CloseDealModal';
+import DealDetailsCard from './DealDetailsCard';
 
 type Tab = 'intelligence' | 'activity' | 'notes' | 'calls' | 'tasks' | 'documents';
 
@@ -41,6 +42,8 @@ export default function LeadDetailClient({ lead: initialLead, notes: initialNote
   const [documents, setDocuments] = useState(initialDocuments);
   const [tab, setTab] = useState<Tab>('activity');
   const [confettiFired, setConfettiFired] = useState(false);
+  const [dealModalOpen, setDealModalOpen] = useState(false);
+  const [dealRefreshKey, setDealRefreshKey] = useState(0);
   const supabase = createClient();
   const router = useRouter();
 
@@ -72,10 +75,9 @@ export default function LeadDetailClient({ lead: initialLead, notes: initialNote
         if (act.data) setActivities(a => [act.data, ...a]);
       }
       if (updates.stage === 'Closed Won') {
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.5 }, colors: ['#1B3A6B', '#059669', '#F59E0B'] });
-        // Auto-create the onboarding record for the new client
-        const res = await ensureOnboardingForLead(supabase, { ...prev, ...updates });
-        if (res.onboarding && !res.existed) toast.success('Onboarding created for this client');
+        // Open the Close Deal flow — confetti + onboarding/SLA happen on submit.
+        setConfettiFired(true); // suppress the on-mount celebratory confetti
+        setDealModalOpen(true);
       }
     }
   };
@@ -139,7 +141,22 @@ export default function LeadDetailClient({ lead: initialLead, notes: initialNote
         </motion.div>
       )}
 
+      {lead.stage === 'Closed Won' && (
+        <DealDetailsCard
+          key={dealRefreshKey}
+          leadId={lead.id}
+          onEditDeal={() => setDealModalOpen(true)}
+        />
+      )}
+
       {lead.stage === 'Closed Won' && <ContractRevenue leadId={lead.id} />}
+
+      <CloseDealModal
+        lead={lead}
+        isOpen={dealModalOpen}
+        onClose={() => setDealModalOpen(false)}
+        onCompleted={() => setDealRefreshKey(k => k + 1)}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left panel */}
