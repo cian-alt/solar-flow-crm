@@ -931,3 +931,63 @@ $$;
 grant execute on function public.sign_get_contract(uuid) to anon, authenticated;
 grant execute on function public.sign_log_view(uuid) to anon, authenticated;
 grant execute on function public.sign_submit_sla(uuid, text, text, text, text) to anon, authenticated;
+
+-- =====================
+-- SLA HTML + status flow (run on existing databases)
+-- =====================
+alter table public.contracts add column if not exists sla_html text;
+
+-- Allow the 'viewed' status (draft → sent → viewed → signed)
+alter table public.contracts drop constraint if exists contracts_sla_status_check;
+alter table public.contracts add constraint contracts_sla_status_check
+  check (sla_status in ('draft','sent','viewed','signed'));
+
+-- On first client view: stamp viewed_at and advance 'sent' → 'viewed'.
+create or replace function public.sign_log_view(p_token uuid)
+returns void language sql security definer set search_path = public volatile as $$
+  update public.contracts
+    set viewed_at = coalesce(viewed_at, now()),
+        sla_status = case when sla_status = 'sent' then 'viewed' else sla_status end
+    where sign_token = p_token;
+$$;
+
+-- On sign: also log a lead activity (attributed to the assigned AM).
+create or replace function public.sign_submit_sla(p_token uuid, p_name text, p_title text, p_signature_url text, p_ip text)
+returns json language plpgsql security definer set search_path = public volatile as $$
+declare c public.contracts; am public.profiles;
+begin
+  select * into c from public.contracts where sign_token = p_token;
+  if c.id is null then return json_build_object('ok', false, 'error', 'invalid token'); end if;
+
+  update public.contracts
+    set signed_at = now(), signer_name = p_name, signer_title = p_title, signer_ip = p_ip,
+        signature_url = p_signature_url, sla_status = 'signed', updated_at = now()
+    where id = c.id;
+
+  if c.onboarding_id is not null then
+    update public.onboardings set sla_signed = true, sla_signed_at = now(), updated_at = now() where id = c.onboarding_id;
+    update public.onboarding_steps set status = 'completed', completed_at = now(), updated_at = now()
+      where onboarding_id = c.onboarding_id and step_type = 'sla_signing' and status <> 'completed';
+  end if;
+
+  select p.* into am from public.profiles p join public.leads l on l.assigned_to = p.id where l.id = c.lead_id;
+
+  if am.id is not null then
+    insert into public.activities (lead_id, user_id, type, description, metadata)
+      values (c.lead_id, am.id, 'sla_signed', coalesce(c.official_company_name, 'Client') || ' signed the SLA', '{}'::jsonb);
+  end if;
+
+  insert into public.notifications (user_id, type, title, message, lead_id)
+    select id, 'onboarding_step_complete', 'SLA signed ✍️', coalesce(c.official_company_name, 'A client') || ' has signed their SLA!', c.lead_id
+    from public.profiles where role = 'admin';
+  if am.id is not null then
+    insert into public.notifications (user_id, type, title, message, lead_id)
+      values (am.id, 'onboarding_step_complete', 'SLA signed ✍️', coalesce(c.official_company_name, 'Your client') || ' has signed their SLA!', c.lead_id);
+  end if;
+
+  return json_build_object('ok', true, 'company', coalesce(c.official_company_name, ''), 'am_name', am.full_name, 'am_email', am.email);
+end;
+$$;
+
+grant execute on function public.sign_log_view(uuid) to anon, authenticated;
+grant execute on function public.sign_submit_sla(uuid, text, text, text, text) to anon, authenticated;

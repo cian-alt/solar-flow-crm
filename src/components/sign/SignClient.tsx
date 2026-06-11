@@ -18,6 +18,7 @@ interface Payload {
     id: string; subscription_package: string | null; monthly_amount: number | null;
     contract_duration_months: number | null; start_date: string | null; payment_type: string;
     onboarding_package: string | null; onboarding_fee: number | null; special_conditions: string | null;
+    sla_html: string | null;
     sla_status: string | null; signed_at: string | null; signer_name: string | null; signer_title: string | null;
     official_company_name: string | null; company_address: string | null; eircode: string | null; vat_number: string | null;
     created_at: string;
@@ -128,6 +129,10 @@ export default function SignClient({ token }: { token: string }) {
           </div>
 
           <div className="px-6 sm:px-10 py-8 text-[15px] leading-relaxed text-slate-800">
+            {c.sla_html ? (
+              <div dangerouslySetInnerHTML={{ __html: c.sla_html }} />
+            ) : (
+            <>
             <h1 className="text-center text-2xl font-bold tracking-wide text-[#1B3A6B] mb-8">SERVICE AGREEMENT</h1>
 
             {/* Parties */}
@@ -222,6 +227,8 @@ export default function SignClient({ token }: { token: string }) {
               <p><strong>A.6 Payment Disputes.</strong> Invoices are payable within 14 days. Disputed amounts must be raised in good faith within 14 days of invoice; undisputed amounts remain payable on time.</p>
               <p><strong>A.7 Fair Use.</strong> Subscription installs and usage allowances are set out in the selected package. Excess usage is billed at the per-unit rates published for that package.</p>
             </div>
+            </>
+            )}
 
             {/* Signatures */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mt-10 pt-6 border-t border-slate-200" style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}>

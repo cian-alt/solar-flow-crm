@@ -10,8 +10,6 @@ import type {
 } from "@/types/database";
 import { createOnboarding, notify } from "./onboarding";
 import { monthsBetween } from "./contractRevenue";
-import { generateSlaPdf } from "./sla";
-import { uploadDocument } from "./storage";
 
 export interface DealPhase {
   monthly_price: number;
@@ -136,46 +134,27 @@ export async function closeDeal(supabase: SupabaseClient, input: CloseDealInput)
     await supabase.from("contracts").update({ onboarding_id: onboarding.id }).eq("id", contractId);
   }
 
-  // ── 3. Generate SLA PDF, upload, attach ───────────────────────────────────────
-  let slaUrl: string | null = null;
-  if (onboarding) {
-    try {
-      const blob = generateSlaPdf({
-        client: {
-          companyName: input.client.officialCompanyName || lead.company_name,
-          address: input.client.address,
-          eircode: input.client.eircode,
-          contactName: input.client.contactName,
-          contactEmail: input.client.contactEmail,
-          contactPhone: input.client.contactPhone,
-          vatNumber: input.client.vatNumber,
-        },
-        subscriptionPackage: input.subscriptionPackage,
-        monthlyAmount: input.monthlyAmount,
-        contractDurationMonths: input.contractDurationMonths,
-        startDate: input.startDate,
-        paymentType: input.paymentType,
-        phases: validPhases,
-        onboardingPackage: input.onboardingPackage,
-        onboardingFee: input.onboardingFee,
-        totalContractValue: total,
-      });
-      const path = `sla/${onboarding.id}/${Date.now()}-SLA.pdf`;
-      const up = await uploadDocument(supabase, blob, path, "application/pdf");
-      if (up.url) {
-        slaUrl = up.url;
-        const { data: { user } } = await supabase.auth.getUser();
-        await supabase.from("onboarding_documents").insert({
-          onboarding_id: onboarding.id, document_type: "sla", title: "Service Level Agreement.pdf",
-          file_url: slaUrl, uploaded_by: user?.id ?? null, visible_to_client: true,
-        });
-      }
-    } catch {
-      // PDF generation/upload failure shouldn't abort the close — surfaced below via missing URL.
-    }
+  // ── 3. Generate the SLA document (HTML) via the API route ──────────────────────
+  // Produces contracts.sla_html, sets sla_status='draft' and ensures sign_token.
+  try {
+    await fetch("/api/generate-sla", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contract_id: contractId }),
+    });
+  } catch {
+    // Non-fatal: the deal is still created; the SLA can be regenerated from the deal section.
   }
+  await supabase.from("contracts").update({ is_draft: false }).eq("id", contractId);
 
-  await supabase.from("contracts").update({ sla_status: "sent", sla_document_url: slaUrl, is_draft: false }).eq("id", contractId);
+  // Log lead activities for the timeline.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    await supabase.from("activities").insert([
+      { lead_id: lead.id, user_id: user.id, type: "contract_created", description: `Contract created — ${input.subscriptionPackage} at €${input.monthlyAmount.toLocaleString("en-IE")}/mo`, metadata: {} },
+      ...(onboarding ? [{ lead_id: lead.id, user_id: user.id, type: "onboarding_created", description: `Onboarding created (${input.onboardingPackage})`, metadata: {} }] : []),
+    ]);
+  }
 
   // ── 4. Commission records (skip if already created for this contract) ──────────
   if (lead.assigned_to) {
@@ -196,7 +175,6 @@ export async function closeDeal(supabase: SupabaseClient, input: CloseDealInput)
 
   // ── 5. Notifications ──────────────────────────────────────────────────────────
   const company = input.client.officialCompanyName || lead.company_name;
-  const { data: { user } } = await supabase.auth.getUser();
   const amName = user?.user_metadata?.full_name ?? "An account manager";
   const { data: admins } = await supabase.from("profiles").select("id").eq("role", "admin");
   for (const admin of (admins ?? []) as { id: string }[]) {

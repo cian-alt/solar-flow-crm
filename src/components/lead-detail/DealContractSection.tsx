@@ -6,7 +6,8 @@ import { FileSignature, Pencil, FileText, Rocket, ExternalLink, Send } from "luc
 import type { Lead, Contract, Onboarding } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 import { monthsBetween } from "@/lib/contractRevenue";
-import { PACKAGE_META } from "@/lib/onboarding";
+import { PACKAGE_META, notify } from "@/lib/onboarding";
+import { fetchContractByLead } from "@/lib/queries/contracts";
 import { formatDate, formatEuro, cn } from "@/lib/utils";
 import toast from "react-hot-toast";
 
@@ -30,12 +31,9 @@ export default function DealContractSection({ lead, onEditDeal }: Props) {
   useEffect(() => { setOrigin(window.location.origin); }, []);
   useEffect(() => {
     (async () => {
-      const { data: c } = await supabase.from("contracts").select("*, phases:contract_phases(*)").eq("lead_id", lead.id).maybeSingle<Contract>();
-      setContract(c ?? null);
-      if (c?.onboarding_id) {
-        const { data: o } = await supabase.from("onboardings").select("id, status, sla_signed").eq("id", c.onboarding_id).maybeSingle();
-        setOnboarding(o ?? null);
-      }
+      const c = await fetchContractByLead(supabase, lead.id);
+      setContract(c);
+      setOnboarding(c?.onboarding ?? null);
       setLoading(false);
     })();
   }, [lead.id, supabase]);
@@ -57,25 +55,31 @@ export default function DealContractSection({ lead, onEditDeal }: Props) {
   const phases = (contract.phases ?? []).slice().sort((a, b) => a.start_date.localeCompare(b.start_date));
   const subTotal = phases.reduce((s, p) => s + (p.monthly_price ?? 0) * monthsBetween(p.start_date, p.end_date), 0);
   const total = subTotal + (contract.onboarding_fee ?? 0);
-  const onbCommission = Math.round((contract.onboarding_fee ?? 0) * 0.4);
-  const retCommission = Math.round((contract.monthly_amount ?? 0) * 0.05);
   const signUrl = origin && contract.sign_token ? `${origin}/sign/${contract.sign_token}` : "";
 
-  const slaStatus = onboarding?.sla_signed || contract.sla_status === "signed" ? "signed" : contract.sla_status === "sent" ? "sent" : "draft";
-  const slaBadge = { draft: "bg-slate-100 text-slate-500", sent: "bg-blue-50 text-blue-600", signed: "bg-emerald-50 text-emerald-600" }[slaStatus];
+  const slaStatus: string = onboarding?.sla_signed || contract.sla_status === "signed" ? "signed" : (contract.sla_status ?? "draft");
+  const slaBadge = ({ draft: "bg-slate-100 text-slate-500", sent: "bg-blue-50 text-blue-600", viewed: "bg-indigo-50 text-indigo-600", signed: "bg-emerald-50 text-emerald-600" } as Record<string, string>)[slaStatus] ?? "bg-slate-100 text-slate-500";
   const onbStatusLabel = onboarding ? ({ not_started: "Not Started", in_progress: "In Progress", completed: "Completed", on_hold: "On Hold" }[onboarding.status]) : "—";
 
-  const resend = async () => {
-    if (!signUrl) return;
+  const sendSla = async () => {
+    if (!signUrl) { toast.error("Generate the SLA first (Edit Deal → Generate)"); return; }
     await supabase.from("contracts").update({ sla_status: "sent" }).eq("id", contract.id);
     setContract({ ...contract, sla_status: "sent" });
+    // Notify the AM + log a lead activity, then open the pre-filled email.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (lead.assigned_to) {
+      await notify(supabase, { user_id: lead.assigned_to, type: "onboarding_created", title: "SLA sent", message: `SLA sent to ${lead.company_name} for signing`, lead_id: lead.id });
+    }
+    if (user) {
+      await supabase.from("activities").insert({ lead_id: lead.id, user_id: user.id, type: "sla_sent", description: "SLA sent to client for signing", metadata: {} });
+    }
     const subject = encodeURIComponent("Review & Sign Your Solar Flow Agreement");
     const body = encodeURIComponent(
       `Hi ${lead.contact_name ?? "there"},\n\nYour Solar Flow service agreement is ready to review and sign.\n\n` +
       `Review & Sign Your Agreement: ${signUrl}\n\nKind regards,\nThe Solar Flow team`,
     );
     window.location.href = `mailto:${lead.email ?? ""}?subject=${subject}&body=${body}`;
-    toast.success("SLA marked as sent");
+    toast.success("SLA sent");
   };
 
   return (
@@ -88,8 +92,8 @@ export default function DealContractSection({ lead, onEditDeal }: Props) {
         </h3>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={onEditDeal} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B3A6B] text-white text-xs font-semibold rounded-lg hover:bg-[#152E55] transition-colors"><Pencil size={13} /> Edit Deal</button>
-          {contract.sla_document_url && (
-            <a href={contract.sla_document_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50"><FileText size={13} /> View SLA <ExternalLink size={10} /></a>
+          {signUrl && contract.sla_status !== "draft" && (
+            <a href={signUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50"><FileText size={13} /> View SLA <ExternalLink size={10} /></a>
           )}
           {contract.onboarding_id && (
             <Link href={`/onboarding/${contract.onboarding_id}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50"><Rocket size={13} /> View Onboarding</Link>
@@ -156,10 +160,6 @@ export default function DealContractSection({ lead, onEditDeal }: Props) {
           <span className="text-sm font-bold text-[#0F172A]">Total Contract Value</span>
           <span className="text-xl font-extrabold text-[#1B3A6B]">{formatEuro(total)}</span>
         </div>
-        <div className="pt-1 space-y-1">
-          <Row label="AM Onboarding Commission" value={formatEuro(onbCommission)} subtle />
-          <Row label="AM Monthly Retention" value={`${formatEuro(retCommission)}/month`} subtle />
-        </div>
       </div>
 
       {/* Section 4 — Status row */}
@@ -178,10 +178,10 @@ export default function DealContractSection({ lead, onEditDeal }: Props) {
         </div>
         <div className="mt-3">
           {slaStatus === "draft" && (
-            <button onClick={onEditDeal} className="flex items-center gap-1.5 px-4 py-2 bg-[#1B3A6B] text-white text-xs font-semibold rounded-lg hover:bg-[#152E55]"><Send size={13} /> Generate &amp; Send SLA</button>
+            <button onClick={sendSla} className="flex items-center gap-1.5 px-4 py-2 bg-[#1B3A6B] text-white text-xs font-semibold rounded-lg hover:bg-[#152E55]"><Send size={13} /> Send SLA</button>
           )}
-          {slaStatus === "sent" && (
-            <button onClick={resend} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50"><Send size={13} /> Resend SLA</button>
+          {(slaStatus === "sent" || slaStatus === "viewed") && (
+            <button onClick={sendSla} className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-50"><Send size={13} /> Resend SLA</button>
           )}
           {slaStatus === "signed" && signUrl && (
             <a href={signUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700"><FileSignature size={13} /> View Signed SLA</a>

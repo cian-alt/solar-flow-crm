@@ -15,6 +15,7 @@ import {
   Briefcase,
   Brain,
   Rocket,
+  FileSignature,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Leads", href: "/leads", icon: Users },
   { label: "Intelligence", href: "/intelligence", icon: Brain },
+  { label: "Deals", href: "/deals", icon: FileSignature },
   { label: "Onboarding", href: "/onboarding", icon: Rocket },
   { label: "Reports", href: "/reports", icon: BarChart3 },
 ];
