@@ -137,8 +137,6 @@ export default function CloseDealModal({ lead, isOpen, onClose, onCompleted }: P
     });
 
   const totals = useMemo(() => dealTotals({ phases: toDealPhases(), onboardingFee: Number(onbFee) || 0 }), [phases, onbFee]);
-  const monthlyCommission = Math.round((Number(monthlyAmount) || 0) * 0.05);
-  const onboardingCommission = Math.round((Number(onbFee) || 0) * 0.4);
 
   const submit = async (generateSla: boolean) => {
     if (!companyName.trim()) { toast.error("Company name is required"); setStep(3); return; }
@@ -224,7 +222,6 @@ export default function CloseDealModal({ lead, isOpen, onClose, onCompleted }: P
                       subPackage={subPackage} monthlyAmount={Number(monthlyAmount) || 0} duration={Number(duration) || 0}
                       onbPackage={onbPackage} onbFee={Number(onbFee) || 0}
                       subscriptionTotal={totals.subscriptionTotal} total={totals.total}
-                      monthlyCommission={monthlyCommission} onboardingCommission={onboardingCommission}
                       companyName={companyName} setCompanyName={setCompanyName} address={address} setAddress={setAddress}
                       eircode={eircode} setEircode={setEircode} contactName={contactName} setContactName={setContactName}
                       contactEmail={contactEmail} setContactEmail={setContactEmail} contactPhone={contactPhone} setContactPhone={setContactPhone}
@@ -367,7 +364,7 @@ function Section2(p: {
 // ── Section 3 ────────────────────────────────────────────────────────────────
 function Section3(p: {
   subPackage: string; monthlyAmount: number; duration: number; onbPackage: string; onbFee: number;
-  subscriptionTotal: number; total: number; monthlyCommission: number; onboardingCommission: number;
+  subscriptionTotal: number; total: number;
   companyName: string; setCompanyName: (v: string) => void; address: string; setAddress: (v: string) => void;
   eircode: string; setEircode: (v: string) => void; contactName: string; setContactName: (v: string) => void;
   contactEmail: string; setContactEmail: (v: string) => void; contactPhone: string; setContactPhone: (v: string) => void;
@@ -385,10 +382,6 @@ function Section3(p: {
         <Row label="Total Subscription Value" value={formatEuro(p.subscriptionTotal)} />
         <Row label={`Onboarding: ${p.onbPackage}`} value={formatEuro(p.onbFee)} />
         <div className="border-t border-emerald-200 pt-2.5"><Row label="Total Contract Value" value={formatEuro(p.total)} bold /></div>
-        <div className="border-t border-emerald-200 pt-2.5 space-y-2">
-          <Row label="Monthly Commission (AM · 5%)" value={formatEuro(p.monthlyCommission)} />
-          <Row label="Onboarding Commission (AM · 40%)" value={formatEuro(p.onboardingCommission)} />
-        </div>
       </div>
 
       <div>

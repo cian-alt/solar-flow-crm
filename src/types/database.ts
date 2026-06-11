@@ -246,7 +246,7 @@ export interface Notification {
 
 export type PaymentType = "monthly" | "upfront";
 
-export type SlaStatus = "draft" | "sent" | "signed";
+export type SlaStatus = "draft" | "sent" | "viewed" | "signed";
 
 export interface Contract {
   id: string;
@@ -271,6 +271,7 @@ export interface Contract {
   vat_number: string | null;
   sla_status: SlaStatus | null;
   sla_document_url: string | null;
+  sla_html: string | null;
   onboarding_id: string | null;
   is_draft: boolean | null;
   // ── SLA signing ──
