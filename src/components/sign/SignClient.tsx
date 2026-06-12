@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { CheckCircle2, FileText } from "lucide-react";
+import { CheckCircle2, FileText, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { monthsBetween } from "@/lib/contractRevenue";
 import { SOLAR_FLOW_COMPANY } from "@/lib/companyDetails";
@@ -20,6 +20,7 @@ interface Payload {
     onboarding_package: string | null; onboarding_fee: number | null; special_conditions: string | null;
     sla_html: string | null;
     sla_status: string | null; signed_at: string | null; signer_name: string | null; signer_title: string | null;
+    signature_url: string | null;
     official_company_name: string | null; company_address: string | null; eircode: string | null; vat_number: string | null;
     created_at: string;
   };
@@ -39,7 +40,7 @@ export default function SignClient({ token }: { token: string }) {
   const [jobTitle, setJobTitle] = useState("");
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState<{ name: string; amName: string | null; amEmail: string | null } | null>(null);
+  const [justSigned, setJustSigned] = useState(false);
   const sigRef = useRef<SignatureCanvas | null>(null);
 
   const load = useCallback(async () => {
@@ -61,10 +62,12 @@ export default function SignClient({ token }: { token: string }) {
     const { data: res, error } = await supabase.rpc("sign_submit_sla", {
       p_token: token, p_name: fullName.trim(), p_title: jobTitle.trim(), p_signature_url: signatureUrl, p_ip: "",
     });
-    setSubmitting(false);
     const r = res as { ok?: boolean; am_name?: string | null; am_email?: string | null } | null;
-    if (error || !r?.ok) { alert("Something went wrong. Please contact Solar Flow."); return; }
-    setDone({ name: fullName.trim(), amName: r.am_name ?? null, amEmail: r.am_email ?? null });
+    if (error || !r?.ok) { setSubmitting(false); alert("Something went wrong. Please contact Solar Flow."); return; }
+    // Refresh so the document re-renders in its signed, read-only state with the captured signature.
+    await load();
+    setJustSigned(true);
+    setSubmitting(false);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Spinner size="lg" /></div>;
@@ -80,46 +83,46 @@ export default function SignClient({ token }: { token: string }) {
   );
 
   const c = data.contract;
-  const alreadySigned = c.sla_status === "signed" || data.onboarding?.sla_signed;
-
-  if (done || alreadySigned) {
-    const name = done?.name ?? c.signer_name ?? "";
-    const amName = done?.amName ?? data.am?.full_name ?? null;
-    const amEmail = done?.amEmail ?? data.am?.email ?? null;
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-[#1B3A6B]">
-        <div className="bg-white rounded-2xl p-10 max-w-lg text-center shadow-2xl">
-          <CheckCircle2 size={56} className="mx-auto text-emerald-500" />
-          <h1 className="text-2xl font-bold text-[#0F172A] mt-4">Thank you{name ? `, ${name}` : ""}!</h1>
-          <p className="text-slate-600 mt-2">Your agreement has been signed.</p>
-          {amName && (
-            <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-slate-100 text-left">
-              <p className="text-xs text-slate-400 uppercase tracking-wide">Your dedicated Account Manager</p>
-              <p className="text-sm font-semibold text-[#0F172A] mt-1">{amName}</p>
-              {amEmail && <a href={`mailto:${amEmail}`} className="text-sm text-[#1B3A6B] hover:underline">{amEmail}</a>}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  const signed = c.sla_status === "signed" || !!data.onboarding?.sla_signed || justSigned;
 
   const subscriptionTotal = data.phases.reduce((s, p) => s + (p.monthly_price ?? 0) * monthsBetween(p.start_date, p.end_date), 0);
   const total = subscriptionTotal + (c.onboarding_fee ?? 0);
   const ref = `SF-${c.id.slice(0, 8).toUpperCase()}`;
 
   return (
-    <div className="min-h-screen bg-[#1B3A6B] py-6 sm:py-10 px-3">
+    <div className="min-h-screen bg-[#1B3A6B] py-6 sm:py-10 px-3 print:bg-white print:py-0">
       <div className="max-w-3xl mx-auto">
-        {/* Progress */}
-        <div className="flex items-center justify-center gap-3 text-white/90 text-xs sm:text-sm mb-4">
-          <span className="font-semibold">Step 1: Read Agreement</span>
-          <span className="text-white/40">→</span>
-          <span className="text-white/60">Step 2: Sign Below</span>
-        </div>
+        {/* Status banner */}
+        {signed ? (
+          <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4 print:hidden">
+            <p className="flex items-center justify-center gap-2 text-emerald-800 font-semibold text-sm sm:text-base">
+              <CheckCircle2 size={18} className="text-emerald-500" />
+              {justSigned ? "Thank you — your agreement has been signed." : "This agreement has been signed."}
+              {c.signer_name ? ` Signed by ${c.signer_name}.` : ""}
+              {c.signed_at ? ` (${formatDate(c.signed_at)})` : ""}
+            </p>
+            <div className="mt-3 flex items-center justify-center gap-3 flex-wrap">
+              {data.am?.full_name && (
+                <span className="text-xs text-emerald-700">
+                  Your Account Manager: <span className="font-semibold">{data.am.full_name}</span>
+                  {data.am.email && <> · <a href={`mailto:${data.am.email}`} className="underline">{data.am.email}</a></>}
+                </span>
+              )}
+              <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-700 text-xs font-semibold hover:bg-emerald-50">
+                <Printer size={13} /> Print / Save PDF
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center gap-3 text-white/90 text-xs sm:text-sm mb-4 print:hidden">
+            <span className="font-semibold">Step 1: Read Agreement</span>
+            <span className="text-white/40">→</span>
+            <span className="text-white/60">Step 2: Sign Below</span>
+          </div>
+        )}
 
         {/* Document */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
           <div className="bg-[#1B3A6B] text-white px-6 sm:px-10 py-6 flex items-center justify-between" style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}>
             <SolarFlowLogo size={28} />
             <div className="text-right text-xs text-white/80">
@@ -240,27 +243,50 @@ export default function SignClient({ token }: { token: string }) {
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">For {data.company}</p>
-                <div className="border-2 border-slate-200 rounded-lg overflow-x-auto bg-white">
-                  <SignatureCanvas ref={sigRef} penColor="#1B3A6B" canvasProps={{ width: 520, height: 160, className: "bg-white" }} />
-                </div>
-                <button onClick={() => sigRef.current?.clear()} className="text-xs text-slate-500 hover:text-[#1B3A6B] mt-1">Clear signature</button>
-                <div className="space-y-3 mt-3">
-                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full Name *" className={signInput} />
-                  <input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Job Title *" className={signInput} />
-                  <p className="text-sm text-slate-500">Date: {formatDate(new Date().toISOString())}</p>
-                  <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
-                    <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1B3A6B]" />
-                    <span>I confirm I have read and agree to all terms of this Agreement.</span>
-                  </label>
-                  <button onClick={submit} disabled={submitting} className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-[#1B3A6B] text-white text-base font-bold hover:bg-[#152E55] transition-colors disabled:opacity-60">
-                    {submitting ? <Spinner size="sm" className="text-white" /> : <FileText size={18} />} Sign Agreement
-                  </button>
-                </div>
+
+                {signed ? (
+                  /* Read-only signed view */
+                  <div>
+                    <div className="border-2 border-slate-200 rounded-lg bg-white overflow-hidden h-[160px] flex items-center justify-center">
+                      {c.signature_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.signature_url} alt="Client signature" className="max-h-[150px] max-w-full object-contain" />
+                      ) : (
+                        <span className="text-slate-400 text-sm italic">Signed electronically</span>
+                      )}
+                    </div>
+                    <div className="mt-3 text-sm text-slate-600 space-y-1">
+                      {c.signer_name && <p><span className="font-semibold text-[#0F172A]">{c.signer_name}</span>{c.signer_title ? `, ${c.signer_title}` : ""}</p>}
+                      <p>Date: {c.signed_at ? formatDate(c.signed_at) : formatDate(new Date().toISOString())}</p>
+                      <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-bold"><CheckCircle2 size={14} /> Signed</span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Signing form */
+                  <>
+                    <div className="border-2 border-slate-200 rounded-lg overflow-x-auto bg-white">
+                      <SignatureCanvas ref={sigRef} penColor="#1B3A6B" canvasProps={{ width: 520, height: 160, className: "bg-white" }} />
+                    </div>
+                    <button onClick={() => sigRef.current?.clear()} className="text-xs text-slate-500 hover:text-[#1B3A6B] mt-1">Clear signature</button>
+                    <div className="space-y-3 mt-3">
+                      <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full Name *" className={signInput} />
+                      <input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Job Title *" className={signInput} />
+                      <p className="text-sm text-slate-500">Date: {formatDate(new Date().toISOString())}</p>
+                      <label className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer">
+                        <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1B3A6B]" />
+                        <span>I confirm I have read and agree to all terms of this Agreement.</span>
+                      </label>
+                      <button onClick={submit} disabled={submitting} className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-[#1B3A6B] text-white text-base font-bold hover:bg-[#152E55] transition-colors disabled:opacity-60">
+                        {submitting ? <Spinner size="sm" className="text-white" /> : <FileText size={18} />} Sign Agreement
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
-        <p className="text-center text-xs text-white/50 mt-6">{SOLAR_FLOW_COMPANY.legalName} · {SOLAR_FLOW_COMPANY.website}</p>
+        <p className="text-center text-xs text-white/50 mt-6 print:hidden">{SOLAR_FLOW_COMPANY.legalName} · {SOLAR_FLOW_COMPANY.website}</p>
       </div>
     </div>
   );
