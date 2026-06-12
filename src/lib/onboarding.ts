@@ -8,6 +8,7 @@ import type {
   OnboardingStepType,
   TrainingSessionType,
 } from "@/types/database";
+import { ONBOARDING_PACKAGE_DEFS } from "./packages";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Package metadata (corrected onboarding packages)
@@ -22,24 +23,25 @@ export interface PackageMeta {
   summary: string;
 }
 
+// Fee + summary derive from the canonical package defs in ./packages; badge styling stays here.
 export const PACKAGE_META: Record<OnboardingPackage, PackageMeta> = {
   Basic: {
     label: "Basic",
-    fee: 0,
+    fee: ONBOARDING_PACKAGE_DEFS.Basic.fee,
     badgeClass: "pkg-basic",
-    summary: "45 min online setup call. Client self-trains afterwards. Dedicated AM.",
+    summary: ONBOARDING_PACKAGE_DEFS.Basic.summary,
   },
   Pro: {
     label: "Pro",
-    fee: 1500,
+    fee: ONBOARDING_PACKAGE_DEFS.Pro.fee,
     badgeClass: "pkg-pro",
-    summary: "Setup call + 8 online training sessions (2 per department). Dedicated AM.",
+    summary: ONBOARDING_PACKAGE_DEFS.Pro.summary,
   },
   Premium: {
     label: "Premium",
-    fee: 2500,
+    fee: ONBOARDING_PACKAGE_DEFS.Premium.fee,
     badgeClass: "pkg-premium",
-    summary: "Everything in Pro + a full-day on-site training visit. Dedicated AM.",
+    summary: ONBOARDING_PACKAGE_DEFS.Premium.summary,
   },
 };
 

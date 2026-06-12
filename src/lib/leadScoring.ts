@@ -6,6 +6,7 @@ import type {
   RecommendedPackage,
   RecommendedOnboarding,
 } from "@/types/database";
+import { SUBSCRIPTION_PACKAGES, ONBOARDING_PACKAGE_DEFS } from "./packages";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Solar Flow package catalogue (used for scoring + MRR estimation)
@@ -15,18 +16,19 @@ export const SUBSCRIPTION_TIERS: Record<
   RecommendedPackage,
   { monthly: number; freeInstalls: number | null; perAdditional: number; label: string }
 > = {
-  Starter: { monthly: 800, freeInstalls: 20, perAdditional: 45, label: "Starter" },
-  Professional: { monthly: 1100, freeInstalls: 40, perAdditional: 32, label: "Professional" },
-  Enterprise: { monthly: 1600, freeInstalls: null, perAdditional: 0, label: "Enterprise" },
+  Starter: { monthly: SUBSCRIPTION_PACKAGES.Starter.monthly, freeInstalls: SUBSCRIPTION_PACKAGES.Starter.installsIncluded, perAdditional: SUBSCRIPTION_PACKAGES.Starter.perAdditionalInstall, label: "Starter" },
+  Professional: { monthly: SUBSCRIPTION_PACKAGES.Professional.monthly, freeInstalls: SUBSCRIPTION_PACKAGES.Professional.installsIncluded, perAdditional: SUBSCRIPTION_PACKAGES.Professional.perAdditionalInstall, label: "Professional" },
+  Enterprise: { monthly: SUBSCRIPTION_PACKAGES.Enterprise.monthly, freeInstalls: SUBSCRIPTION_PACKAGES.Enterprise.installsIncluded, perAdditional: SUBSCRIPTION_PACKAGES.Enterprise.perAdditionalInstall, label: "Enterprise" },
 };
 
+// Onboarding contents derive from the canonical package defs in ./packages.
 export const ONBOARDING_PACKAGES: Record<
   RecommendedOnboarding,
   { fee: number; label: string; detail: string }
 > = {
-  Basic: { fee: 0, label: "Basic", detail: "1hr setup, dedicated AM" },
-  Pro: { fee: 1500, label: "Pro", detail: "1hr setup, dedicated AM, 3 online training sessions per dept" },
-  Premium: { fee: 2500, label: "Premium", detail: "1hr setup, dedicated AM, in-person training per dept" },
+  Basic: { fee: ONBOARDING_PACKAGE_DEFS.Basic.fee, label: "Basic", detail: ONBOARDING_PACKAGE_DEFS.Basic.summary },
+  Pro: { fee: ONBOARDING_PACKAGE_DEFS.Pro.fee, label: "Pro", detail: ONBOARDING_PACKAGE_DEFS.Pro.summary },
+  Premium: { fee: ONBOARDING_PACKAGE_DEFS.Premium.fee, label: "Premium", detail: ONBOARDING_PACKAGE_DEFS.Premium.summary },
 };
 
 // Employee Management add-on: €2.99/employee/month
