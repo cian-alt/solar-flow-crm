@@ -238,10 +238,15 @@ export default function SignClient({ token }: { token: string }) {
             {/* Signatures */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mt-10 pt-6 border-t border-slate-200" style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}>
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">For Solar Flow</p>
-                <p className="text-sm text-slate-600">Name: ______________________</p>
-                <p className="text-sm text-slate-600 mt-2">Title: ______________________</p>
-                <p className="text-sm text-slate-600 mt-2">Date: ______________________</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">For {SOLAR_FLOW_COMPANY.legalName}</p>
+                <div className="border-2 border-slate-200 rounded-lg bg-white h-[160px] flex items-center justify-center px-4">
+                  <span className="text-3xl text-[#1B3A6B] leading-none" style={{ fontFamily: "'Snell Roundhand','Brush Script MT','Apple Chancery',cursive" }}>{SOLAR_FLOW_COMPANY.signatoryName}</span>
+                </div>
+                <div className="mt-3 text-sm text-slate-600 space-y-1">
+                  <p><span className="font-semibold text-[#0F172A]">{SOLAR_FLOW_COMPANY.signatoryName}</span>, {SOLAR_FLOW_COMPANY.signatoryTitle}</p>
+                  <p>Date: {signed ? formatDate(c.signed_at ?? new Date().toISOString()) : "On client signature"}</p>
+                  <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-bold"><CheckCircle2 size={14} /> Countersigned</span>
+                </div>
               </div>
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-3">For {data.company}</p>

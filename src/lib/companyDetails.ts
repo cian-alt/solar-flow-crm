@@ -11,6 +11,8 @@ export const SOLAR_FLOW_COMPANY = {
   website: "www.solarflow.ie",
   vat: "",
   registration: "IE 654321",
+  signatoryName: "Cian O Murchu",
+  signatoryTitle: "Product Director",
 };
 
 /** Standard Solar Flow SLA terms & conditions (numbered on the document). */

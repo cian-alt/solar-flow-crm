@@ -101,16 +101,6 @@ export function buildSlaHtml(input: SlaHtmlInput): string {
   <p><strong>A.5 Cancellation.</strong> The Client may cancel on 30 days’ written notice effective at the end of the then-current billing month. Pre-paid fees are non-refundable save where required by law.</p>
   <p><strong>A.6 Payment Disputes.</strong> Invoices are payable within 14 days. Disputed amounts must be raised in good faith within 14 days; undisputed amounts remain payable on time.</p>
 
-  <h2>Signatures</h2>
-  <div class="parties">
-    <div>
-      <p class="label">For ${esc(SOLAR_FLOW_COMPANY.legalName)}</p>
-      <p>Name: ____________________<br/><br/>Title: ____________________<br/><br/>Date: ____________________</p>
-    </div>
-    <div>
-      <p class="label">For ${esc(input.company)}</p>
-      <p>Signature captured electronically below.</p>
-    </div>
-  </div>
+  <!-- Signature block is rendered by the signing page (SignClient) so it appears once, interactive. -->
 </div>`;
 }
