@@ -146,7 +146,7 @@ export default function SignClient({ token }: { token: string }) {
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-1">Provider</p>
                 <p className="font-semibold">{SOLAR_FLOW_COMPANY.legalName}</p>
                 <p className="text-sm text-slate-600">{SOLAR_FLOW_COMPANY.address}</p>
-                <p className="text-sm text-slate-600">VAT: {SOLAR_FLOW_COMPANY.vat}</p>
+                {SOLAR_FLOW_COMPANY.vat && <p className="text-sm text-slate-600">VAT: {SOLAR_FLOW_COMPANY.vat}</p>}
                 <p className="text-sm text-slate-600">{SOLAR_FLOW_COMPANY.email}</p>
               </div>
               <div>

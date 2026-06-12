@@ -70,7 +70,7 @@ export function buildSlaHtml(input: SlaHtmlInput): string {
   <div class="parties">
     <div>
       <p class="label">Provider</p>
-      <p><strong>${esc(SOLAR_FLOW_COMPANY.legalName)}</strong><br/>${esc(SOLAR_FLOW_COMPANY.address)}<br/>VAT: ${esc(SOLAR_FLOW_COMPANY.vat)}<br/>${esc(SOLAR_FLOW_COMPANY.email)}</p>
+      <p><strong>${esc(SOLAR_FLOW_COMPANY.legalName)}</strong><br/>${esc(SOLAR_FLOW_COMPANY.address)}<br/>${SOLAR_FLOW_COMPANY.vat ? `VAT: ${esc(SOLAR_FLOW_COMPANY.vat)}<br/>` : ""}${esc(SOLAR_FLOW_COMPANY.email)}</p>
     </div>
     <div>
       <p class="label">Client</p>
