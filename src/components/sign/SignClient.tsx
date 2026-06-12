@@ -83,7 +83,9 @@ export default function SignClient({ token }: { token: string }) {
   );
 
   const c = data.contract;
-  const signed = c.sla_status === "signed" || !!data.onboarding?.sla_signed || justSigned;
+  // The signing gate is driven by THIS contract's own status — not the linked
+  // onboarding's SLA flag — so a contract can be (re)signed independently.
+  const signed = c.sla_status === "signed" || justSigned;
 
   const subscriptionTotal = data.phases.reduce((s, p) => s + (p.monthly_price ?? 0) * monthsBetween(p.start_date, p.end_date), 0);
   const total = subscriptionTotal + (c.onboarding_fee ?? 0);
