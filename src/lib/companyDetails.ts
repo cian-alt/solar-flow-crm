@@ -4,7 +4,7 @@
  */
 export const SOLAR_FLOW_COMPANY = {
   name: "Solar Flow",
-  legalName: "Beo Software Solutions",
+  legalName: "Beo Software Solutions Ltd",
   address: "Unit 4, Riverside Business Park, Dublin, D01 X2Y3, Ireland",
   email: "hello@solarflow.ie",
   phone: "+353 1 555 0123",
